@@ -46,23 +46,23 @@ export default function Upload() {
 
       <div
         {...getRootProps()}
-        className={`glass rounded-2xl p-12 text-center cursor-pointer transition-all border-2 border-dashed ${
+        className={`glass rounded-2xl p-6 sm:p-12 text-center cursor-pointer transition-all border-2 border-dashed ${
           isDragActive ? 'border-red-500 bg-red-500/5' : 'border-trinetra-border hover:border-red-500/50'
         }`}
       >
         <input {...getInputProps()} />
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center">
-            <UploadIcon className="w-8 h-8 text-red-400" />
+        <div className="flex flex-col items-center gap-3 sm:gap-4">
+          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-red-500/10 flex items-center justify-center">
+            <UploadIcon className="w-6 h-6 sm:w-8 sm:h-8 text-red-400" />
           </div>
           {isDragActive ? (
-            <p className="text-lg text-red-400">Drop image here ...</p>
+            <p className="text-base sm:text-lg text-red-400">Drop image here ...</p>
           ) : (
             <>
-              <p className="text-lg text-trinetra-text">
+              <p className="text-sm sm:text-lg text-trinetra-text text-center px-4">
                 Drag & drop a traffic image, or <span className="text-red-400 underline cursor-pointer">browse</span>
               </p>
-              <p className="text-sm text-trinetra-muted">Supports JPG, PNG, BMP, WebP</p>
+              <p className="text-xs sm:text-sm text-trinetra-muted">Supports JPG, PNG, BMP, WebP</p>
             </>
           )}
         </div>

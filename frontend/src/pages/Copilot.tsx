@@ -126,9 +126,9 @@ export default function Copilot() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
-      <h1 className="text-2xl font-bold text-white mb-2">AI Copilot</h1>
-      <p className="text-trinetra-muted mb-6">Ask questions about traffic violations in natural language</p>
+    <div className="flex flex-col h-[calc(100vh-12rem)] sm:h-[calc(100vh-8rem)]">
+      <h1 className="text-xl sm:text-2xl font-bold text-white mb-2">AI Copilot</h1>
+      <p className="text-trinetra-muted mb-4 sm:mb-6 text-sm sm:text-base">Ask questions about traffic violations in natural language</p>
 
       <div className="flex-1 glass rounded-xl p-4 mb-4 overflow-y-auto space-y-4">
         {messages.map((msg, i) => (

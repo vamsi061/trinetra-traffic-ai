@@ -14,18 +14,18 @@ export default function Home() {
 
   return (
     <div>
-      <div className="text-center mb-12 p-10 rounded-2xl relative overflow-hidden"
+      <div className="text-center mb-6 sm:mb-12 p-6 sm:p-10 rounded-2xl relative overflow-hidden"
         style={{ background: 'linear-gradient(135deg, #0d1225 0%, #1a2040 50%, #0f1a3a 100%)' }}>
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-10 left-10 w-40 h-40 rounded-full bg-red-500 blur-3xl" />
           <div className="absolute bottom-10 right-10 w-60 h-60 rounded-full bg-blue-500 blur-3xl" />
         </div>
         <div className="relative">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-red-500 to-red-700 mb-4">
-            <TrafficCone className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-red-500 to-red-700 mb-3 sm:mb-4">
+            <TrafficCone className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2">TRINETRA AI</h1>
-          <p className="text-trinetra-muted text-lg max-w-xl mx-auto">
+          <h1 className="text-2xl sm:text-4xl font-bold text-white mb-2">TRINETRA AI</h1>
+          <p className="text-trinetra-muted text-sm sm:text-lg max-w-xl mx-auto">
             AI-Powered Traffic Violation Detection &amp; Enforcement Intelligence Platform
           </p>
         </div>
@@ -80,9 +80,9 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="glass rounded-xl p-6 mt-8">
+      <div className="glass rounded-xl p-4 sm:p-6 mt-6 sm:mt-8">
         <h2 className="text-lg font-semibold text-white mb-4">System Workflow</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
           {[
             { step: '1', label: 'Upload Image' },
             { step: '2', label: 'Image Enhancement' },

@@ -28,7 +28,7 @@ export default function Analytics() {
       <p className="text-trinetra-muted mb-8">Visual insights from traffic violation data</p>
 
       {stats && (
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
           {[
             { label: 'Total Violations', value: stats.total },
             { label: 'No Helmet Cases', value: stats.no_helmet },
@@ -42,12 +42,12 @@ export default function Analytics() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Pie Chart */}
-        <div className="glass rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Violations by Type</h3>
+        <div className="glass rounded-xl p-4 sm:p-6">
+          <h3 className="text-sm sm:text-lg font-semibold text-white mb-4">Violations by Type</h3>
           {typeData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie data={typeData} cx="50%" cy="50%" innerRadius={70} outerRadius={110}
                      dataKey="count" nameKey="name" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
@@ -62,10 +62,10 @@ export default function Analytics() {
         </div>
 
         {/* Bar Chart */}
-        <div className="glass rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Violations by Type</h3>
+        <div className="glass rounded-xl p-4 sm:p-6">
+          <h3 className="text-sm sm:text-lg font-semibold text-white mb-4">Violations by Type</h3>
           {typeData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250}>
               <BarChart data={typeData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e2a4a" />
                 <XAxis dataKey="name" stroke="#8892b0" tick={{ fill: '#8892b0' }} />
@@ -80,10 +80,10 @@ export default function Analytics() {
         </div>
 
         {/* Daily Trend */}
-        <div className="glass rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Daily Trend (Last 30 Days)</h3>
+        <div className="glass rounded-xl p-4 sm:p-6">
+          <h3 className="text-sm sm:text-lg font-semibold text-white mb-4">Daily Trend (Last 30 Days)</h3>
           {dayData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250}>
               <AreaChart data={dayData}>
                 <defs>
                   <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
@@ -102,10 +102,10 @@ export default function Analytics() {
         </div>
 
         {/* Repeat Offenders */}
-        <div className="glass rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Top Repeat Offenders</h3>
+        <div className="glass rounded-xl p-4 sm:p-6">
+          <h3 className="text-sm sm:text-lg font-semibold text-white mb-4">Top Repeat Offenders</h3>
           {offenderData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250}>
               <BarChart data={offenderData.slice(0, 10)} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e2a4a" />
                 <XAxis type="number" stroke="#8892b0" tick={{ fill: '#8892b0' }} />
@@ -118,10 +118,10 @@ export default function Analytics() {
         </div>
 
         {/* Monthly Trend */}
-        <div className="glass rounded-xl p-6 lg:col-span-2">
+        <div className="glass rounded-xl p-4 sm:p-6 lg:col-span-2">
           <h3 className="text-lg font-semibold text-white mb-4">Monthly Trend (Last 6 Months)</h3>
           {monthData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={350}>
+            <ResponsiveContainer width="100%" height={280}>
               <LineChart data={monthData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e2a4a" />
                 <XAxis dataKey="month" stroke="#8892b0" tick={{ fill: '#8892b0' }} />

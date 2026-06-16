@@ -51,7 +51,7 @@ export default function Records() {
       <p className="text-trinetra-muted mb-8">Search and review all detected traffic violations</p>
 
       {stats && (
-        <div className="grid grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
           {[
             { label: 'Total', value: stats.total, color: 'border-l-red-500' },
             { label: 'No Helmet', value: stats.no_helmet, color: 'border-l-red-500' },
@@ -66,10 +66,10 @@ export default function Records() {
         </div>
       )}
 
-      <div className="glass rounded-xl p-6 mb-8">
-        <div className="flex gap-4 items-end">
+      <div className="glass rounded-xl p-4 sm:p-6 mb-6 sm:mb-8">
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
           <div className="flex-1">
-            <label className="text-sm text-trinetra-muted mb-1 block">Search Vehicle Number</label>
+            <label className="text-xs text-trinetra-muted mb-1 block">Search Vehicle Number</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-trinetra-muted" />
               <input
@@ -82,8 +82,8 @@ export default function Records() {
               />
             </div>
           </div>
-          <div className="w-48">
-            <label className="text-sm text-trinetra-muted mb-1 block">Violation Type</label>
+          <div className="sm:w-40">
+            <label className="text-xs text-trinetra-muted mb-1 block">Violation Type</label>
             <select
               value={typeFilter}
               onChange={e => { setTypeFilter(e.target.value); loadRecords(search, e.target.value) }}
@@ -94,12 +94,14 @@ export default function Records() {
               <option value="TRIPLE_RIDING">Triple Riding</option>
             </select>
           </div>
-          <button onClick={handleSearch} className="px-6 py-2.5 bg-red-500 hover:bg-red-600 rounded-lg text-white text-sm font-medium transition-colors">
-            Search
-          </button>
-          <button onClick={downloadCSV} className="px-4 py-2.5 bg-[#1a2040] hover:bg-[#243050] rounded-lg text-trinetra-text text-sm transition-colors flex items-center gap-2">
-            <Download className="w-4 h-4" /> CSV
-          </button>
+          <div className="flex gap-2">
+            <button onClick={handleSearch} className="flex-1 sm:flex-none px-5 py-2.5 bg-red-500 hover:bg-red-600 rounded-lg text-white text-sm font-medium transition-colors">
+              Search
+            </button>
+            <button onClick={downloadCSV} className="px-4 py-2.5 bg-[#1a2040] hover:bg-[#243050] rounded-lg text-trinetra-text text-sm transition-colors flex items-center gap-2">
+              <Download className="w-4 h-4" /> CSV
+            </button>
+          </div>
         </div>
       </div>
 
@@ -113,8 +115,8 @@ export default function Records() {
             <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin mx-auto" />
           </div>
         ) : records.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto -mx-3 sm:mx-0">
+            <table className="w-full min-w-[600px]">
               <thead>
                 <tr className="text-xs text-trinetra-muted uppercase border-b border-trinetra-border">
                   <th className="text-left p-4">ID</th>
