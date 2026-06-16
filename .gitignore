@@ -1,3 +1,5 @@
+node_modules/
+dist/
 __pycache__/
 *.pyc
 *.pyo
@@ -10,3 +12,5 @@ data/database.db
 !data/uploads/.gitkeep
 !data/evidence/.gitkeep
 .DS_Store
+backend/__pycache__/
+*.log
