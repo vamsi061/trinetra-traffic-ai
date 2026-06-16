@@ -91,7 +91,7 @@ def run_evaluation(samples_dir):
         violations = []
         for v in check_helmet_violation(detections, processed):
             violations.append(v)
-        for v in check_triple_riding(detections):
+        for v in check_triple_riding(detections, processed):
             violations.append(v)
         for v in check_seatbelt_violation(detections, processed):
             violations.append(v)
@@ -239,7 +239,7 @@ def run_benchmark(samples_dir):
         stages['helmet_check'].append((time.time() - t0) * 1000)
 
         t0 = time.time()
-        check_triple_riding(detections)
+        check_triple_riding(detections, processed)
         stages['triple_check'].append((time.time() - t0) * 1000)
 
         t0 = time.time()

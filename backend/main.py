@@ -15,6 +15,7 @@ from ai.helmet_detector import check_helmet_violation
 from ai.triple_riding import check_triple_riding
 from ai.seatbelt_detector import check_seatbelt_violation
 from ai.wrong_side_detector import check_wrong_side_violation
+from ai.rider_association import associate_riders
 from ai.ocr import LicensePlateReader
 from ai.evidence_generator import generate_evidence
 from database.db import (
@@ -35,18 +36,6 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="TRINETRA AI API", version="2.0.0", lifespan=lifespan)
-
-
-def _iou(box1, box2):
-    x1 = max(box1[0], box2[0])
-    y1 = max(box1[1], box2[1])
-    x2 = min(box1[2], box2[2])
-    y2 = min(box1[3], box2[3])
-    inter = max(0, x2 - x1) * max(0, y2 - y1)
-    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
-    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
-    union = area1 + area2 - inter
-    return inter / union if union > 0 else 0
 
 
 app.add_middleware(
@@ -90,10 +79,11 @@ async def detect_violations(file: UploadFile = File(...)):
         d['instance_id'] = f"{label}_{instance_counts[label]}"
         detections.append(d)
 
+    # Pass image to triple_riding for expanded association + debug viz
     violations = []
     for fn in [check_helmet_violation, check_triple_riding,
                check_seatbelt_violation, check_wrong_side_violation]:
-        args = [detections, processed] if fn in [check_helmet_violation, check_seatbelt_violation, check_wrong_side_violation] else [detections]
+        args = [detections, processed] if fn in [check_helmet_violation, check_seatbelt_violation, check_wrong_side_violation] else [detections, processed]
         for v in fn(*args):
             violations.append(v)
 
@@ -109,22 +99,29 @@ async def detect_violations(file: UploadFile = File(...)):
         (config.VEHICLE_CLASSES[d["class_id"]] for d in detections
          if d["class_id"] in config.VEHICLE_CLASSES), "")
 
-    # Build per-motorcycle rider breakdown for the response
+    # Build per-motorcycle rider breakdown using expanded association
+    persons_mc = [d for d in detections if d['label'] == 'person']
+    motorcycles = [d for d in detections if d['label'] == 'motorcycle']
+    mc_associations = associate_riders(persons_mc, motorcycles, processed.shape[:2])
     motorcycle_riders = []
-    for d in detections:
-        if d['label'] == 'motorcycle':
-            riders = [p for p in detections
-                      if p['label'] == 'person'
-                      and _iou(p['bbox'], d['bbox']) > 0.1]
-            motorcycle_riders.append({
-                'motorcycle_id': d['instance_id'],
-                'motorcycle_bbox': [round(v, 1) for v in d['bbox']],
-                'rider_count': len(riders),
-                'riders': [r['instance_id'] for r in riders],
-            })
+    for assoc in mc_associations:
+        mc = assoc['motorcycle']
+        riders = assoc['riders']
+        motorcycle_riders.append({
+            'motorcycle_id': mc['instance_id'],
+            'motorcycle_bbox': [round(v, 1) for v in mc['bbox']],
+            'rider_count': assoc['rider_count'],
+            'riders': [r['instance_id'] for r in riders],
+        })
 
     evidence_path = generate_evidence(processed, detections, violations,
                                        (plate_text, plate_conf))
+
+    # Compute total risk score
+    total_risk = sum(v.get('severity_score', config.RISK_SCORES.get(v["violation_type"], 0)) for v in violations)
+    risk_status = 'NONE'
+    if total_risk > 0:
+        risk_status = 'MODERATE' if total_risk < 75 else ('HIGH' if total_risk < 120 else 'CRITICAL')
 
     for v in violations:
         record = ViolationRecord(
@@ -150,9 +147,12 @@ async def detect_violations(file: UploadFile = File(...)):
         "violations": [
             {"type": v["violation_type"], "confidence": round(v["confidence"], 3),
              "description": v.get("description", ""),
-             "involved_objects": v.get("involved_objects", [])}
+             "involved_objects": v.get("involved_objects", []),
+             "severity_score": v.get("severity_score", config.RISK_SCORES.get(v["violation_type"], 0))}
             for v in violations
         ],
+        "risk_score": total_risk,
+        "risk_status": risk_status,
         "license_plate": {"number": plate_text, "confidence": round(plate_conf, 3)} if plate_text else None,
         "evidence_path": os.path.basename(evidence_path) if evidence_path else None,
     }

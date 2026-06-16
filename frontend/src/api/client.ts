@@ -24,11 +24,7 @@ export interface Violation {
   confidence: number
   description: string
   involved_objects: string[]
-}
-
-export interface LicensePlate {
-  number: string
-  confidence: number
+  severity_score?: number
 }
 
 export interface DetectResponse {
@@ -36,8 +32,15 @@ export interface DetectResponse {
   detections: Detection[]
   violations: Violation[]
   motorcycle_riders: MotorcycleRider[]
+  risk_score?: number
+  risk_status?: string
   license_plate: LicensePlate | null
   evidence_path: string | null
+}
+
+export interface LicensePlate {
+  number: string
+  confidence: number
 }
 
 export interface ViolationRecord {

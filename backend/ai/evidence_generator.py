@@ -15,6 +15,7 @@ COLORS = {
     'plate': (0, 255, 255),
     'seatbelt': (0, 165, 255),
     'wrong_side': (255, 0, 255),
+    'overloading': (0, 0, 255),
     'default': (255, 255, 255),
 }
 
@@ -57,6 +58,18 @@ def generate_evidence(original_image, detections, violations, plate_info):
                 cv2.rectangle(image, (x1, y1), (x2, y2), (0, 165, 255), 2)
                 cv2.putText(image, 'RIDER', (x1, y1 - 5),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2)
+        elif vtype == 'MOTORCYCLE_OVERLOADING':
+            if 'motorcycle_bbox' in violation:
+                x1, y1, x2, y2 = [int(v) for v in violation['motorcycle_bbox']]
+                cv2.rectangle(image, (x1, y1), (x2, y2), COLORS['overloading'], 4)
+                cv2.putText(image, f"OVERLOADING ({violation.get('rider_count', 0)} riders)",
+                            (x1, y1 - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                            COLORS['overloading'], 2)
+            for rider in violation.get('riders', []):
+                x1, y1, x2, y2 = [int(v) for v in rider['bbox']]
+                cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                cv2.putText(image, 'RIDER', (x1, y1 - 5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
         elif vtype == 'SEATBELT_VIOLATION':
             if 'person_bbox' in violation:
                 x1, y1, x2, y2 = [int(v) for v in violation['person_bbox']]

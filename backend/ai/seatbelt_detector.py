@@ -16,7 +16,8 @@ def iou(box1, box2):
 
 
 def is_person_in_car(person_bbox, car_bbox):
-    return iou(person_bbox, car_bbox) > config.SEATBELT_IoU_THRESHOLD
+    from ai.rider_association import person_in_car_expanded
+    return person_in_car_expanded(person_bbox, car_bbox)
 
 
 def detect_seatbelt_in_torso(image, person_bbox):

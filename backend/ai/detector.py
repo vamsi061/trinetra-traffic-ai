@@ -20,7 +20,7 @@ class ObjectDetector:
 
     def detect(self, image):
         model = self.load_model()
-        results = model(image, conf=config.CONFIDENCE_THRESHOLD)[0]
+        results = model(image, conf=config.CONFIDENCE_THRESHOLD, agnostic_nms=getattr(config, 'AGNOSTIC_NMS', True))[0]
         detections = []
         if results.boxes is not None:
             boxes = results.boxes.xyxy.cpu().numpy()

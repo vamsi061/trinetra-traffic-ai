@@ -252,7 +252,7 @@ class LocateAnythingDetector:
                 return []
 
         try:
-            results = self._yolo_model(image, conf=config.CONFIDENCE_THRESHOLD)[0]
+            results = self._yolo_model(image, conf=config.CONFIDENCE_THRESHOLD, agnostic_nms=config.AGNOSTIC_NMS)[0]
             detections = []
             if results.boxes is not None:
                 boxes = results.boxes.xyxy.cpu().numpy()

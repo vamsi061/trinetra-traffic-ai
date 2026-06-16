@@ -37,6 +37,7 @@ export default function Upload() {
   const violationColors: Record<string, string> = {
     NO_HELMET: 'text-red-400 border-red-500/30 bg-red-500/10',
     TRIPLE_RIDING: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+    MOTORCYCLE_OVERLOADING: 'text-rose-300 border-rose-500/30 bg-rose-500/10',
     SEATBELT_VIOLATION: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
     WRONG_SIDE_DRIVING: 'text-purple-400 border-purple-500/30 bg-purple-500/10',
   }
@@ -156,6 +157,17 @@ export default function Upload() {
 
           <div className="glass rounded-xl p-6">
             <h3 className="text-lg font-semibold text-white mb-4">Violation Report</h3>
+
+            {result.risk_score !== undefined && result.risk_score > 0 && (
+              <div className={`mb-4 p-3 rounded-lg border text-sm font-semibold ${
+                result.risk_status === 'CRITICAL' ? 'bg-red-500/20 border-red-500/40 text-red-300' :
+                result.risk_status === 'HIGH' ? 'bg-orange-500/20 border-orange-500/40 text-orange-300' :
+                'bg-yellow-500/20 border-yellow-500/40 text-yellow-300'
+              }`}>
+                Risk Score: {result.risk_score} — Status: {result.risk_status}
+              </div>
+            )}
+
             {result.violations.length > 0 ? (
               <div className="space-y-3">
                 {result.violations.map((v, i) => (
@@ -163,6 +175,15 @@ export default function Upload() {
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="font-semibold">{v.type.replace('_', ' ')}</span>
+                        {v.severity_score !== undefined && (
+                          <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
+                            v.severity_score >= 95 ? 'bg-red-500/20 text-red-300' :
+                            v.severity_score >= 75 ? 'bg-orange-500/20 text-orange-300' :
+                            'bg-yellow-500/20 text-yellow-300'
+                          }`}>
+                            Severity: {v.severity_score}
+                          </span>
+                        )}
                         <p className="text-sm opacity-80 mt-1">{v.description}</p>
                         {v.involved_objects?.length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-2">
