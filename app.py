@@ -27,7 +27,7 @@ def apply_custom_style():
         margin-bottom: 0.5rem;
     }
     .main-header p {
-        color: #cccccc;
+        color: #e0e0e0;
         font-size: 1.1rem;
     }
     .metric-card {
@@ -38,7 +38,7 @@ def apply_custom_style():
         text-align: center;
     }
     .metric-card h3 {
-        color: #ffffff;
+        color: #f0f0f0;
         margin: 0;
         font-size: 1rem;
     }
@@ -48,11 +48,24 @@ def apply_custom_style():
         font-weight: bold;
     }
     .detection-item {
-        background: #262730;
+        background: #2d2d3a;
         padding: 0.75rem;
         border-radius: 5px;
         margin-bottom: 0.5rem;
         border-left: 3px solid #00ff88;
+        color: #e8e8e8;
+    }
+    .detection-item strong {
+        color: #ffffff;
+    }
+    .detection-item small {
+        color: #b0b0b0;
+    }
+    .stApp {
+        background-color: #0e1117;
+    }
+    .stSidebar {
+        background-color: #1a1a2e;
     }
     </style>
     """, unsafe_allow_html=True)

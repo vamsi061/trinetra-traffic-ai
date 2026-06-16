@@ -184,13 +184,17 @@ def show():
         padding: 1rem;
         border-radius: 0.5rem;
         margin-bottom: 0.5rem;
+        color: #e8e8e8;
+    }
+    .chat-message strong {
+        color: #ffffff;
     }
     .user-message {
-        background-color: #262730;
+        background-color: #2d2d3a;
         border-left: 3px solid #ff4444;
     }
     .bot-message {
-        background-color: #1e1e1e;
+        background-color: #1e1e28;
         border-left: 3px solid #00ff88;
     }
     </style>
