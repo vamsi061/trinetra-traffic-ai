@@ -36,19 +36,26 @@ class ObjectDetector:
                 })
         return detections
 
-    def detect_vehicles(self, image):
-        all_detections = self.detect(image)
+    def filter_vehicles(self, detections):
         vehicles = []
-        for det in all_detections:
+        for det in detections:
             if det['class_id'] in config.VEHICLE_CLASSES:
                 det['vehicle_type'] = config.VEHICLE_CLASSES[det['class_id']]
                 vehicles.append(det)
         return vehicles
 
-    def detect_persons(self, image):
+    def detect_vehicles(self, image):
         all_detections = self.detect(image)
-        return [d for d in all_detections if d['class_id'] == config.PERSON_CLASS_ID]
+        return self.filter_vehicles(all_detections)
+
+    def filter_persons(self, detections):
+        return [d for d in detections if d['class_id'] == config.PERSON_CLASS_ID]
+
+    def filter_motorcycles(self, detections):
+        return [d for d in detections if d['class_id'] == config.MOTORCYCLE_CLASS_ID]
+
+    def detect_persons(self, image):
+        return self.filter_persons(self.detect(image))
 
     def detect_motorcycles(self, image):
-        all_detections = self.detect(image)
-        return [d for d in all_detections if d['class_id'] == config.MOTORCYCLE_CLASS_ID]
+        return self.filter_motorcycles(self.detect(image))

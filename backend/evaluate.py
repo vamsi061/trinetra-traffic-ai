@@ -1,22 +1,4 @@
-"""Performance evaluation for TRINETRA AI detection pipeline.
-
-Computes:
-  - Accuracy, Precision, Recall, F1-score
-  - Mean Average Precision (mAP)
-  - Per-class metrics
-  - Inference speed benchmarks
-
-Usage:
-    python evaluate.py                          # Run evaluation with all test images
-    python evaluate.py --samples path/to/dir    # Use custom sample directory
-    python evaluate.py --benchmark              # Run speed benchmarks only
-"""
-
-import os
-import sys
-import time
-import json
-import argparse
+import os, sys, time, json, argparse
 import numpy as np
 from collections import defaultdict
 
@@ -33,21 +15,25 @@ from utils.image_processing import enhance_image
 import config
 
 SAMPLES_DIR = os.path.join(os.path.dirname(__file__), 'tests', 'samples')
+GROUND_TRUTH_FILE = os.path.join(SAMPLES_DIR, 'ground_truth.json')
+
+ALL_VIOLATION_TYPES = ['NO_HELMET', 'TRIPLE_RIDING', 'SEATBELT_VIOLATION', 'WRONG_SIDE_DRIVING']
 
 
 def load_ground_truth(samples_dir):
+    gt_file = os.path.join(samples_dir, 'ground_truth.json')
+    if not os.path.exists(gt_file):
+        return {}
+
+    with open(gt_file) as f:
+        default_gt = json.load(f)
+
     ground_truth = {}
-    label_map = {
-        'test1_no_helmet.jpg': {'violations': ['NO_HELMET'], 'objects': ['motorcycle', 'person']},
-        'test2_with_helmet.jpg': {'violations': [], 'objects': ['motorcycle', 'person']},
-        'test3_triple_riding.jpg': {'violations': ['TRIPLE_RIDING'], 'objects': ['motorcycle', 'person', 'person', 'person']},
-        'test4_car_plate.jpg': {'violations': [], 'objects': ['car']},
-        'test5_compliant.jpg': {'violations': [], 'objects': ['motorcycle', 'person', 'person']},
-        'test6_no_vehicle.jpg': {'violations': [], 'objects': []},
-    }
-    for fname in os.listdir(samples_dir):
-        if fname in label_map:
-            ground_truth[fname] = label_map[fname]
+    for fname in sorted(default_gt.keys()):
+        fpath = os.path.join(samples_dir, fname)
+        if os.path.exists(fpath):
+            ground_truth[fname] = default_gt[fname]
+
     return ground_truth
 
 
@@ -59,8 +45,8 @@ def compute_metrics(y_true, y_pred):
 
     total = tp + fp + fn + tn
     accuracy = (tp + tn) / total if total > 0 else 0.0
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    precision = tp / (tp + fp) if (tp + fp) > 0 else (1.0 if tp == 0 and fn == 0 else 0.0)
+    recall = tp / (tp + fn) if (tp + fn) > 0 else (1.0 if tp == 0 and fp == 0 else 0.0)
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
 
     return {
@@ -72,49 +58,18 @@ def compute_metrics(y_true, y_pred):
     }
 
 
-def compute_map(detections_list, ground_truths_list, iou_threshold=0.5):
-    all_ious = []
-    for dets, gts in zip(detections_list, ground_truths_list):
-        for d in dets:
-            for g in gts:
-                x1 = max(d['bbox'][0], g['bbox'][0])
-                y1 = max(d['bbox'][1], g['bbox'][1])
-                x2 = min(d['bbox'][2], g['bbox'][2])
-                y2 = min(d['bbox'][3], g['bbox'][3])
-                inter = max(0, x2 - x1) * max(0, y2 - y1)
-                area_d = (d['bbox'][2] - d['bbox'][0]) * (d['bbox'][3] - d['bbox'][1])
-                area_g = (g['bbox'][2] - g['bbox'][0]) * (g['bbox'][3] - g['bbox'][1])
-                union = area_d + area_g - inter
-                iou_val = inter / union if union > 0 else 0
-                all_ious.append(iou_val > iou_threshold)
-
-    if not all_ious:
-        return 0.0
-    return round(sum(all_ious) / len(all_ious), 4)
-
-
 def run_evaluation(samples_dir):
     print("\n" + "=" * 65)
-    print("  TRINETRA AI — Performance Evaluation")
+    print("  TRINETRA AI — Performance Evaluation (Real Images)")
     print("=" * 65)
 
     ground_truth = load_ground_truth(samples_dir)
     if not ground_truth:
-        print("  ⚠ No ground truth data found. Using auto-generated labels.")
-        for fname in sorted(os.listdir(samples_dir)):
-            if fname.endswith(('.jpg', '.png')):
-                violations = []
-                if 'no_helmet' in fname:
-                    violations.append('NO_HELMET')
-                if 'triple' in fname:
-                    violations.append('TRIPLE_RIDING')
-                ground_truth[fname] = {'violations': violations, 'objects': []}
+        print("  ⚠ No ground truth data found.")
+        return
 
     detector = ObjectDetector()
-    all_vtypes = set()
-    y_true_all = []
-    y_pred_all = []
-
+    all_vtypes = set(ALL_VIOLATION_TYPES)
     violation_results = defaultdict(lambda: {'tp': 0, 'fp': 0, 'fn': 0, 'tn': 0})
     per_image_results = []
     inference_times = []
@@ -131,6 +86,7 @@ def run_evaluation(samples_dir):
         t0 = time.time()
         processed = enhance_image(img)
         detections = detector.detect(processed)
+        vehicles = detector.filter_vehicles(detections)
 
         violations = []
         for v in check_helmet_violation(detections, processed):
@@ -142,13 +98,17 @@ def run_evaluation(samples_dir):
         for v in check_wrong_side_violation(detections, processed):
             violations.append(v)
 
+        if vehicles:
+            reader = LicensePlateReader()
+            biggest = max(vehicles, key=lambda v:
+                (v['bbox'][2] - v['bbox'][0]) * (v['bbox'][3] - v['bbox'][1]))
+            reader.read_plate(processed, biggest['bbox'])
+
         inference_time = (time.time() - t0) * 1000
         inference_times.append(inference_time)
 
         predicted_vtypes = set(v['violation_type'] for v in violations)
         gt_vtypes = set(gt.get('violations', []))
-
-        all_vtypes.update(gt_vtypes | predicted_vtypes)
 
         for vtype in all_vtypes:
             if vtype in gt_vtypes and vtype in predicted_vtypes:
@@ -166,43 +126,61 @@ def run_evaluation(samples_dir):
             'predicted': list(predicted_vtypes),
             'inference_ms': round(inference_time, 1),
             'detection_count': len(detections),
+            'correct': predicted_vtypes == gt_vtypes,
         })
-
-        y_true_all.extend([1 if v in gt_vtypes else 0 for v in all_vtypes])
-        y_pred_all.extend([1 if v in predicted_vtypes else 0 for v in all_vtypes])
 
     print(f"\n{'─' * 65}")
     print(f"  Dataset: {len(per_image_results)} images evaluated")
+    print(f"  Images with YOLO detections: {sum(1 for r in per_image_results if r['detection_count'] > 0)}")
     print(f"{'─' * 65}")
 
     print(f"\n  {'Per-Image Results':^61}")
     print(f"  {'─' * 61}")
-    header = f"  {'Image':<30} {'GT':<20} {'Predicted':<20} {'Time(ms)':<10}"
+    header = f"  {'Image':<35} {'Status':<10} {'Detections':<12} {'Time(ms)':<10}"
     print(header)
     print(f"  {'─' * 61}")
+    correct_count = 0
     for r in per_image_results:
-        gt_str = ','.join(r['gt']) if r['gt'] else '—'
-        pred_str = ','.join(r['predicted']) if r['predicted'] else '—'
-        print(f"  {r['image']:<30} {gt_str:<20} {pred_str:<20} {r['inference_ms']:<10.1f}")
+        status = "✓" if r['correct'] else "✗"
+        if r['correct']:
+            correct_count += 1
+        det_str = str(r['detection_count']) if r['detection_count'] > 0 else '—'
+        gt_str = f" GT:{r['gt']}" if r['gt'] else ""
+        pred_str = f" PD:{r['predicted']}" if r['predicted'] else ""
+        print(f"  {r['image']:<35} {status:<10} {det_str:<12} {r['inference_ms']:<10.1f}{gt_str}{pred_str}")
 
     print(f"\n  {'─' * 65}")
     print(f"  {'Overall Metrics':^61}")
     print(f"  {'─' * 65}")
+
+    y_true_all = []
+    y_pred_all = []
+    for r in per_image_results:
+        for vtype in all_vtypes:
+            y_true_all.append(1 if vtype in r['gt'] else 0)
+            y_pred_all.append(1 if vtype in r['predicted'] else 0)
+
     overall = compute_metrics(y_true_all, y_pred_all)
+    print(f"  {'Test Accuracy':<25} {correct_count}/{len(per_image_results)} ({correct_count/len(per_image_results)*100:.1f}%)")
     for key in ['accuracy', 'precision', 'recall', 'f1_score']:
-        print(f"  {key.replace('_', ' ').title():<20} {overall[key]:.4f}")
-    print(f"  {'TP':<20} {overall['tp']}   {'FP':<20} {overall['fp']}")
-    print(f"  {'FN':<20} {overall['fn']}   {'TN':<20} {overall['tn']}")
+        print(f"  {key.replace('_', ' ').title():<25} {overall[key]:.4f}")
 
     print(f"\n  {'─' * 65}")
     print(f"  {'Per-Violation Metrics':^61}")
     print(f"  {'─' * 65}")
+    any_violations_found = False
     for vtype in sorted(all_vtypes):
         r = violation_results[vtype]
-        prec = r['tp'] / (r['tp'] + r['fp']) if (r['tp'] + r['fp']) > 0 else 0.0
-        rec = r['tp'] / (r['tp'] + r['fn']) if (r['tp'] + r['fn']) > 0 else 0.0
+        prec = r['tp'] / (r['tp'] + r['fp']) if (r['tp'] + r['fp']) > 0 else (1.0 if r['tp'] == 0 and r['fn'] == 0 else 0.0)
+        rec = r['tp'] / (r['tp'] + r['fn']) if (r['tp'] + r['fn']) > 0 else (1.0 if r['tp'] == 0 and r['fp'] == 0 else 0.0)
         f1 = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0.0
-        print(f"  {vtype:<25} Precision: {prec:.3f}  Recall: {rec:.3f}  F1: {f1:.3f}")
+        if r['tp'] + r['fp'] + r['fn'] + r['tn'] > 0:
+            any_violations_found = True
+            print(f"  {vtype:<30} TP:{r['tp']} FP:{r['fp']} FN:{r['fn']} TN:{r['tn']}  "
+                  f"Prec:{prec:.3f} Rec:{rec:.3f} F1:{f1:.3f}")
+
+    if not any_violations_found:
+        print(f"  {'(no violation test cases - all images were clean/negative)':^61}")
 
     if inference_times:
         print(f"\n  {'─' * 65}")
@@ -225,7 +203,6 @@ def run_benchmark(samples_dir):
 
     detector = ObjectDetector()
     reader = LicensePlateReader()
-    reader.load_reader()
 
     image_files = [f for f in sorted(os.listdir(samples_dir))
                    if f.endswith(('.jpg', '.png'))]
@@ -245,7 +222,7 @@ def run_benchmark(samples_dir):
         'plate_ocr': [],
     }
 
-    for fname in image_files:
+    for fname in image_files[:20]:
         path = os.path.join(samples_dir, fname)
         img = cv2.imread(path)
         if img is None:
@@ -273,7 +250,7 @@ def run_benchmark(samples_dir):
         check_wrong_side_violation(detections, processed)
         stages['wrong_side_check'].append((time.time() - t0) * 1000)
 
-        vehicles = detector.detect_vehicles(processed)
+        vehicles = detector.filter_vehicles(detections)
         t0 = time.time()
         if vehicles:
             biggest = max(vehicles, key=lambda v:

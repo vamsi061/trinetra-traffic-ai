@@ -76,7 +76,7 @@ async def detect_violations(file: UploadFile = File(...)):
             violations.append(v)
 
     plate_text, plate_conf = "", 0.0
-    vehicles = detector.detect_vehicles(processed)
+    vehicles = detector.filter_vehicles(detections)
     if vehicles:
         reader = LicensePlateReader()
         biggest = max(vehicles, key=lambda v:
