@@ -174,14 +174,14 @@ def run_evaluation(sample_dir=None):
 
     import cv2
     import numpy as np
-    from ai.detector import ObjectDetector
+    from ai.locate_anything import LocateAnythingDetector
     from ai.helmet_detector import check_helmet_violation
     from ai.triple_riding import check_triple_riding
     from ai.seatbelt_detector import check_seatbelt_violation
     from ai.wrong_side_detector import check_wrong_side_violation
     from utils.image_processing import enhance_image
 
-    detector = ObjectDetector()
+    detector = LocateAnythingDetector()
     VTYPES = ['NO_HELMET', 'TRIPLE_RIDING', 'SEATBELT_VIOLATION', 'WRONG_SIDE_DRIVING']
     stats = {v: {'tp': 0, 'fp': 0, 'fn': 0, 'tn': 0} for v in VTYPES}
     per_image = []

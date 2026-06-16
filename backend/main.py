@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 
 from utils.image_processing import enhance_image
-from ai.detector import ObjectDetector
+from ai.locate_anything import LocateAnythingDetector
 from ai.helmet_detector import check_helmet_violation
 from ai.triple_riding import check_triple_riding
 from ai.seatbelt_detector import check_seatbelt_violation
@@ -65,7 +65,7 @@ async def detect_violations(file: UploadFile = File(...)):
         f.write(contents)
 
     processed = enhance_image(image)
-    detector = ObjectDetector()
+    detector = LocateAnythingDetector()
     detections = detector.detect(processed)
 
     violations = []

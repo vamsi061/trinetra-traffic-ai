@@ -5,7 +5,7 @@ from collections import defaultdict
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import cv2
-from ai.detector import ObjectDetector
+from ai.locate_anything import LocateAnythingDetector
 from ai.helmet_detector import check_helmet_violation
 from ai.triple_riding import check_triple_riding
 from ai.seatbelt_detector import check_seatbelt_violation
@@ -68,7 +68,7 @@ def run_evaluation(samples_dir):
         print("  ⚠ No ground truth data found.")
         return
 
-    detector = ObjectDetector()
+    detector = LocateAnythingDetector()
     all_vtypes = set(ALL_VIOLATION_TYPES)
     violation_results = defaultdict(lambda: {'tp': 0, 'fp': 0, 'fn': 0, 'tn': 0})
     per_image_results = []
@@ -201,7 +201,7 @@ def run_benchmark(samples_dir):
     print("  TRINETRA AI — Speed Benchmark")
     print("=" * 65)
 
-    detector = ObjectDetector()
+    detector = LocateAnythingDetector()
     reader = LicensePlateReader()
 
     image_files = [f for f in sorted(os.listdir(samples_dir))
