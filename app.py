@@ -64,8 +64,28 @@ def apply_custom_style():
     .stApp {
         background-color: #0e1117;
     }
-    .stSidebar {
+    section[data-testid="stSidebar"] {
         background-color: #1a1a2e;
+    }
+    section[data-testid="stSidebar"] .stMarkdown {
+        color: #e0e0e0;
+    }
+    section[data-testid="stSidebar"] .stMarkdown h1,
+    section[data-testid="stSidebar"] .stMarkdown h2,
+    section[data-testid="stSidebar"] .stMarkdown h3 {
+        color: #ffffff;
+    }
+    section[data-testid="stSidebar"] .stMarkdown strong {
+        color: #ffffff;
+    }
+    section[data-testid="stSidebar"] .stRadio label {
+        color: #d0d0d0;
+    }
+    section[data-testid="stSidebar"] .stRadio label:hover {
+        color: #ffffff;
+    }
+    section[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label p {
+        color: #d0d0d0;
     }
     </style>
     """, unsafe_allow_html=True)
