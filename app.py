@@ -59,10 +59,29 @@ def apply_custom_style():
         color: #ffffff;
     }
     .detection-item small {
-        color: #b0b0b0;
+        color: #c8c8c8;
     }
     .stApp {
         background-color: #0e1117;
+        color: #e0e0e0;
+    }
+    .stApp .stMarkdown,
+    .stApp p, .stApp span, .stApp li,
+    .stApp .stText, .stApp .stWrite {
+        color: #e0e0e0;
+    }
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5 {
+        color: #ffffff;
+    }
+    .stApp .stAlert {
+        color: #e0e0e0;
+    }
+    .stApp .stCodeBlock {
+        background-color: #1e1e28;
+    }
+    .stApp .stJson {
+        background-color: #1e1e28;
+        color: #e0e0e0;
     }
     section[data-testid="stSidebar"] {
         background-color: #1a1a2e;

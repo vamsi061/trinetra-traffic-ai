@@ -1,6 +1,7 @@
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
 import pandas as pd
 from database.db import (
     get_violations_by_type,
@@ -10,6 +11,8 @@ from database.db import (
     get_statistics,
 )
 import config
+
+pio.templates.default = "plotly_dark"
 
 
 def show():
@@ -42,17 +45,18 @@ def show():
             fig = px.pie(
                 df, values='count', names='type',
                 title='Distribution of Violation Types',
-                color_discrete_sequence=px.colors.qualitative.Set3,
+                color_discrete_sequence=px.colors.qualitative.Set2,
                 hole=0.4,
             )
-            fig.update_traces(textposition='inside', textinfo='percent+label')
+            fig.update_traces(textposition='inside', textinfo='percent+label',
+                              textfont_color='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
             fig2 = px.bar(
                 df, x='type', y='count',
                 title='Violations by Type (Bar Chart)',
                 color='type',
-                color_discrete_sequence=px.colors.qualitative.Set3,
+                color_discrete_sequence=px.colors.qualitative.Set2,
             )
             fig2.update_layout(showlegend=False)
             st.plotly_chart(fig2, use_container_width=True)
@@ -70,8 +74,9 @@ def show():
                 title='Daily Violation Trend',
                 markers=True,
                 line_shape='linear',
+                color_discrete_sequence=['#ff6b6b'],
             )
-            fig.update_traces(line_color='#ff4444', marker_color='#ff4444')
+            fig.update_traces(marker=dict(size=8, color='#ff6b6b'))
             fig.update_layout(
                 xaxis_title='Date',
                 yaxis_title='Number of Violations',
@@ -81,8 +86,9 @@ def show():
             fig2 = px.area(
                 df, x='day', y='count',
                 title='Daily Violation Volume',
+                color_discrete_sequence=['#ff6b6b'],
             )
-            fig2.update_traces(fillcolor='rgba(255, 68, 68, 0.3)', line_color='#ff4444')
+            fig2.update_traces(fillcolor='rgba(255, 107, 107, 0.5)', line_color='#ff6b6b')
             st.plotly_chart(fig2, use_container_width=True)
         else:
             st.info("No daily trend data available yet.")
