@@ -29,7 +29,7 @@ class TestWrongSideDetection:
         assert get_average_lane_angle(None) is None
 
     def test_is_vehicle_wrong_side_no_lanes(self):
-        wrong, conf = is_vehicle_wrong_side([0, 0, 100, 100], [], [])
+        wrong, conf = is_vehicle_wrong_side([0, 0, 100, 100], [], [], 640)
         assert wrong == False
         assert conf == 0.0
 

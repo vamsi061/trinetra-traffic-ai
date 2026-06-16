@@ -22,18 +22,24 @@ def is_person_in_car(person_bbox, car_bbox):
 def detect_seatbelt_in_torso(image, person_bbox):
     x1, y1, x2, y2 = [int(v) for v in person_bbox]
     person_h = y2 - y1
-    torso_y1 = y1 + int(person_h * 0.2)
+    person_w = x2 - x1
+
+    if person_h < 40 or person_w < 20:
+        return None
+
+    torso_y1 = y1 + int(person_h * 0.25)
     torso_y2 = y1 + int(person_h * 0.55)
     torso_region = image[torso_y1:torso_y2, x1:x2]
-    if torso_region.size == 0 or torso_region.shape[0] < 5 or torso_region.shape[1] < 5:
+
+    if torso_region.size == 0 or torso_region.shape[0] < 10 or torso_region.shape[1] < 10:
         return None
 
     gray = cv2.cvtColor(torso_region, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (3, 3), 0)
-    edges = cv2.Canny(blurred, 50, 150)
+    edges = cv2.Canny(blurred, 40, 120)
     lines = cv2.HoughLinesP(
         edges, rho=1, theta=np.pi / 180,
-        threshold=50, minLineLength=30, maxLineGap=20
+        threshold=40, minLineLength=int(person_h * 0.15), maxLineGap=15
     )
 
     if lines is None:
@@ -41,19 +47,24 @@ def detect_seatbelt_in_torso(image, person_bbox):
 
     h, w = torso_region.shape[:2]
     cx, cy = w // 2, h // 2
+    diagonal_count = 0
     for line in lines:
         x1_l, y1_l, x2_l, y2_l = line[0]
         angle = abs(np.degrees(np.arctan2(y2_l - y1_l, x2_l - x1_l)))
-        is_diagonal = 20 < angle < 70 or 110 < angle < 160
+        is_diagonal = 25 < angle < 65 or 115 < angle < 155
         if not is_diagonal:
+            continue
+        line_len = np.sqrt((x2_l - x1_l) ** 2 + (y2_l - y1_l) ** 2)
+        if line_len < 15:
             continue
         line_cx = (x1_l + x2_l) / 2
         line_cy = (y1_l + y2_l) / 2
         dist = np.sqrt((line_cx - cx) ** 2 + (line_cy - cy) ** 2)
-        if dist < w * 0.5:
-            return True
+        if dist < w * 0.4:
+            diagonal_count += 1
 
-    return False
+    # Require at least 2 diagonal lines to confirm seatbelt
+    return diagonal_count >= 2
 
 
 def check_seatbelt_violation(detections, image):

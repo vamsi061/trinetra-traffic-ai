@@ -39,9 +39,11 @@ def classify_lane_lines(lines, image_width):
         slope = (y2 - y1) / (x2 - x1 + 1e-6)
         if 0.2 < abs(slope) < 3.0:
             line_cx = (x1 + x2) / 2
-            if slope < 0 and line_cx < cx:
+            # Left lane line: positive slope on left side of image
+            if slope > 0 and line_cx < cx:
                 left_lines.append(line)
-            elif slope > 0 and line_cx > cx:
+            # Right lane line: negative slope on right side of image
+            elif slope < 0 and line_cx > cx:
                 right_lines.append(line)
 
     return left_lines, right_lines
@@ -58,26 +60,31 @@ def get_average_lane_angle(lines):
     return np.mean(angles)
 
 
-def is_vehicle_wrong_side(vehicle_bbox, left_lines, right_lines):
+def is_vehicle_wrong_side(vehicle_bbox, left_lines, right_lines, image_width):
     vx = (vehicle_bbox[0] + vehicle_bbox[2]) / 2
     vw = vehicle_bbox[2] - vehicle_bbox[0]
-    cx = vx + vw / 2
+    vh = vehicle_bbox[3] - vehicle_bbox[1]
 
     num_left = len(left_lines) if left_lines else 0
     num_right = len(right_lines) if right_lines else 0
 
-    if num_left == 0 and num_right == 0:
+    total_lines = num_left + num_right
+    if total_lines < 4:
         return False, 0.0
 
-    left_score = num_left / (num_left + num_right + 1)
-    right_score = num_right / (num_left + num_right + 1)
+    ratio = max(num_left, num_right) / total_lines
+    if ratio < 0.7:
+        return False, 0.0
 
-    expected_side = 'left' if right_score > left_score else 'right'
+    vehicle_center_is_left = vx < image_width * 0.4
+    vehicle_center_is_right = vx > image_width * 0.6
 
-    if expected_side == 'left' and cx > 640:
-        return True, right_score
-    elif expected_side == 'right' and cx < 640:
-        return True, left_score
+    more_left = num_left > num_right
+
+    if more_left and vehicle_center_is_left:
+        return True, round(num_left / total_lines, 2)
+    if not more_left and vehicle_center_is_right:
+        return True, round(num_right / total_lines, 2)
 
     return False, 0.0
 
@@ -94,12 +101,12 @@ def check_wrong_side_violation(detections, image):
         return violations
 
     left_lines, right_lines = classify_lane_lines(lines, image.shape[1])
-    if len(left_lines) < 2 and len(right_lines) < 2:
+    if len(left_lines) + len(right_lines) < 4:
         return violations
 
     for vehicle in vehicles:
         wrong_side, confidence = is_vehicle_wrong_side(
-            vehicle['bbox'], left_lines, right_lines
+            vehicle['bbox'], left_lines, right_lines, image.shape[1]
         )
         if wrong_side:
             vtype = config.VEHICLE_CLASSES.get(vehicle['class_id'], 'vehicle')
