@@ -33,6 +33,10 @@ def check_triple_riding(detections):
                 'rider_count': len(riders),
                 'riders': riders,
                 'motorcycle_bbox': motorcycle['bbox'],
-                'description': f'{len(riders)} riders on motorcycle (exceeds limit of 2)',
+                'description': f'{len(riders)} riders on {motorcycle.get("instance_id", "motorcycle")} (exceeds limit of 2)',
+                'involved_objects': (
+                    [motorcycle.get('instance_id', 'motorcycle')]
+                    + [r.get('instance_id', 'rider') for r in riders]
+                ),
             })
     return violations

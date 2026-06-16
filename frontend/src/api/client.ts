@@ -6,15 +6,24 @@ const api = axios.create({
 })
 
 export interface Detection {
+  instance_id: string
   label: string
   confidence: number
   bbox: number[]
+}
+
+export interface MotorcycleRider {
+  motorcycle_id: string
+  motorcycle_bbox: number[]
+  rider_count: number
+  riders: string[]
 }
 
 export interface Violation {
   type: string
   confidence: number
   description: string
+  involved_objects: string[]
 }
 
 export interface LicensePlate {
@@ -26,6 +35,7 @@ export interface DetectResponse {
   success: boolean
   detections: Detection[]
   violations: Violation[]
+  motorcycle_riders: MotorcycleRider[]
   license_plate: LicensePlate | null
   evidence_path: string | null
 }

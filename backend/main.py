@@ -36,6 +36,19 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="TRINETRA AI API", version="2.0.0", lifespan=lifespan)
 
+
+def _iou(box1, box2):
+    x1 = max(box1[0], box2[0])
+    y1 = max(box1[1], box2[1])
+    x2 = min(box1[2], box2[2])
+    y2 = min(box1[3], box2[3])
+    inter = max(0, x2 - x1) * max(0, y2 - y1)
+    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+    union = area1 + area2 - inter
+    return inter / union if union > 0 else 0
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -66,7 +79,16 @@ async def detect_violations(file: UploadFile = File(...)):
 
     processed = enhance_image(image)
     detector = LocateAnythingDetector()
-    detections = detector.detect(processed)
+    raw_detections = detector.detect(processed)
+
+    # Assign unique instance IDs per label type
+    instance_counts = {}
+    detections = []
+    for d in raw_detections:
+        label = d['label']
+        instance_counts[label] = instance_counts.get(label, 0) + 1
+        d['instance_id'] = f"{label}_{instance_counts[label]}"
+        detections.append(d)
 
     violations = []
     for fn in [check_helmet_violation, check_triple_riding,
@@ -76,7 +98,7 @@ async def detect_violations(file: UploadFile = File(...)):
             violations.append(v)
 
     plate_text, plate_conf = "", 0.0
-    vehicles = detector.filter_vehicles(detections)
+    vehicles = detector.filter_vehicles(raw_detections)
     if vehicles:
         reader = LicensePlateReader()
         biggest = max(vehicles, key=lambda v:
@@ -86,6 +108,20 @@ async def detect_violations(file: UploadFile = File(...)):
     vehicle_type = next(
         (config.VEHICLE_CLASSES[d["class_id"]] for d in detections
          if d["class_id"] in config.VEHICLE_CLASSES), "")
+
+    # Build per-motorcycle rider breakdown for the response
+    motorcycle_riders = []
+    for d in detections:
+        if d['label'] == 'motorcycle':
+            riders = [p for p in detections
+                      if p['label'] == 'person'
+                      and _iou(p['bbox'], d['bbox']) > 0.1]
+            motorcycle_riders.append({
+                'motorcycle_id': d['instance_id'],
+                'motorcycle_bbox': [round(v, 1) for v in d['bbox']],
+                'rider_count': len(riders),
+                'riders': [r['instance_id'] for r in riders],
+            })
 
     evidence_path = generate_evidence(processed, detections, violations,
                                        (plate_text, plate_conf))
@@ -105,13 +141,16 @@ async def detect_violations(file: UploadFile = File(...)):
     return {
         "success": True,
         "detections": [
-            {"label": d["label"], "confidence": round(d["confidence"], 3),
+            {"instance_id": d["instance_id"], "label": d["label"],
+             "confidence": round(d["confidence"], 3),
              "bbox": [round(v, 1) for v in d["bbox"]]}
             for d in detections
         ],
+        "motorcycle_riders": motorcycle_riders,
         "violations": [
             {"type": v["violation_type"], "confidence": round(v["confidence"], 3),
-             "description": v.get("description", "")}
+             "description": v.get("description", ""),
+             "involved_objects": v.get("involved_objects", [])}
             for v in violations
         ],
         "license_plate": {"number": plate_text, "confidence": round(plate_conf, 3)} if plate_text else None,

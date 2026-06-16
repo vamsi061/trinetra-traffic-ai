@@ -59,7 +59,11 @@ def check_helmet_violation(detections, image):
                         'confidence': person['confidence'],
                         'person_bbox': person['bbox'],
                         'motorcycle_bbox': motorcycle['bbox'],
-                        'description': 'Rider without helmet detected',
+                        'description': f'Rider {person.get("instance_id", "")} without helmet on {motorcycle.get("instance_id", "motorcycle")}',
+                        'involved_objects': [
+                            person.get('instance_id', 'person'),
+                            motorcycle.get('instance_id', 'motorcycle'),
+                        ],
                     })
                 break
     return violations

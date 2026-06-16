@@ -115,7 +115,8 @@ def check_wrong_side_violation(detections, image):
                 'confidence': confidence,
                 'vehicle_bbox': vehicle['bbox'],
                 'vehicle_type': vtype,
-                'description': f'{vtype.capitalize()} driving on wrong side of road',
+                'description': f'{vehicle.get("instance_id", vtype)} driving on wrong side of road',
+                'involved_objects': [vehicle.get('instance_id', vtype)],
             })
 
     return violations

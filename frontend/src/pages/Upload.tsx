@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload as UploadIcon, Image as ImageIcon, AlertTriangle, CheckCircle, Search } from 'lucide-react'
+import { Upload as UploadIcon, Image as ImageIcon, AlertTriangle, CheckCircle, Search, Users } from 'lucide-react'
 import { uploadImage, DetectResponse, getEvidenceUrl } from '../api/client'
 
 export default function Upload() {
@@ -113,8 +113,41 @@ export default function Upload() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {result.detections.map((d, i) => (
                   <div key={i} className="bg-[#1a2040] rounded-lg p-3 flex items-center justify-between">
-                    <span className="text-white capitalize">{d.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-trinetra-muted font-mono">{d.instance_id}</span>
+                      <span className="text-white capitalize">{d.label}</span>
+                    </div>
                     <span className="text-sm text-trinetra-muted">{(d.confidence * 100).toFixed(0)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {result.motorcycle_riders?.length > 0 && (
+            <div className="glass rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Motorcycle Rider Breakdown</h3>
+              <div className="space-y-3">
+                {result.motorcycle_riders.map((mr, i) => (
+                  <div key={i} className="bg-[#1a2040] rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span className="font-mono text-sm text-amber-400">{mr.motorcycle_id}</span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-bold text-white">{mr.rider_count}</span>
+                      <span className="text-sm text-trinetra-muted">
+                        {mr.rider_count === 1 ? 'rider' : 'riders'}
+                        {mr.rider_count > 2 ? ' ⚠️ Triple riding violation' : ''}
+                      </span>
+                    </div>
+                    {mr.riders.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {mr.riders.map((r, j) => (
+                          <span key={j} className="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full font-mono">{r}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -131,6 +164,13 @@ export default function Upload() {
                       <div>
                         <span className="font-semibold">{v.type.replace('_', ' ')}</span>
                         <p className="text-sm opacity-80 mt-1">{v.description}</p>
+                        {v.involved_objects?.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {v.involved_objects.map((obj, j) => (
+                              <span key={j} className="text-xs bg-white/5 text-trinetra-muted px-2 py-0.5 rounded-full font-mono">{obj}</span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <span className="text-sm font-mono">{(v.confidence * 100).toFixed(0)}%</span>
                     </div>

@@ -30,9 +30,10 @@ def generate_evidence(original_image, detections, violations, plate_info):
     for det in detections:
         x1, y1, x2, y2 = [int(v) for v in det['bbox']]
         label = det.get('label', 'unknown')
+        instance_id = det.get('instance_id', label)
         color = get_color(label)
         cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
-        text = f"{label} {det['confidence']:.2f}"
+        text = f"{instance_id} {det['confidence']:.2f}"
         cv2.putText(image, text, (x1, y1 - 5),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 

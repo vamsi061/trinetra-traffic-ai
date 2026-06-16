@@ -82,7 +82,11 @@ def check_seatbelt_violation(detections, image):
                         'confidence': person['confidence'],
                         'person_bbox': person['bbox'],
                         'vehicle_bbox': car['bbox'],
-                        'description': 'Vehicle occupant without seatbelt detected',
+                        'description': f'{person.get("instance_id", "Person")} without seatbelt in {car.get("instance_id", "car")}',
+                        'involved_objects': [
+                            person.get('instance_id', 'person'),
+                            car.get('instance_id', 'car'),
+                        ],
                     })
                 break
     return violations
