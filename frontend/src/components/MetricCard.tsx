@@ -5,20 +5,28 @@ interface Props {
   color?: string
 }
 
+const colorMap: Record<string, { border: string; hex: string }> = {
+  red: { border: 'border-red-500', hex: '#ef4444' },
+  green: { border: 'border-green-500', hex: '#22c55e' },
+  blue: { border: 'border-blue-500', hex: '#3b82f6' },
+  amber: { border: 'border-amber-500', hex: '#f59e0b' },
+  orange: { border: 'border-orange-500', hex: '#f97316' },
+  purple: { border: 'border-purple-500', hex: '#a855f7' },
+}
+
 export default function MetricCard({ label, value, icon, color = 'red' }: Props) {
-  const borderColor = color === 'red' ? 'border-red-500' : color === 'green' ? 'border-green-500' : 'border-blue-500'
-  const glowColor = color === 'red' ? 'rgba(239,68,68,0.15)' : color === 'green' ? 'rgba(34,197,94,0.15)' : 'rgba(59,130,246,0.15)'
+  const c = colorMap[color] || colorMap.red
 
   return (
     <div
-      className="glass rounded-xl p-6 border-l-4 transition-all duration-300 hover:scale-105"
-      style={{ borderLeftColor: color === 'red' ? '#ef4444' : color === 'green' ? '#22c55e' : '#3b82f6' }}
+      className="glass rounded-xl p-4 border-l-4 transition-all duration-300 hover:scale-105"
+      style={{ borderLeftColor: c.hex }}
     >
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm text-trinetra-muted">{label}</span>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs sm:text-sm text-trinetra-muted">{label}</span>
         {icon && <span className="text-trinetra-muted">{icon}</span>}
       </div>
-      <div className="text-3xl font-bold text-white">{value}</div>
+      <div className="text-xl sm:text-3xl font-bold text-white">{value}</div>
     </div>
   )
 }

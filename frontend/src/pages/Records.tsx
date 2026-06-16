@@ -51,11 +51,13 @@ export default function Records() {
       <p className="text-trinetra-muted mb-8">Search and review all detected traffic violations</p>
 
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 sm:gap-4 mb-6 sm:mb-8">
           {[
             { label: 'Total', value: stats.total, color: 'border-l-red-500' },
             { label: 'No Helmet', value: stats.no_helmet, color: 'border-l-red-500' },
             { label: 'Triple Riding', value: stats.triple_riding, color: 'border-l-amber-500' },
+            { label: 'Seatbelt', value: stats.seatbelt_offence, color: 'border-l-orange-500' },
+            { label: 'Wrong Side', value: stats.wrong_side, color: 'border-l-purple-500' },
             { label: 'Unique Vehicles', value: stats.unique_vehicles, color: 'border-l-blue-500' },
           ].map(s => (
             <div key={s.label} className={`glass rounded-xl p-4 border-l-4 ${s.color}`}>
@@ -92,6 +94,8 @@ export default function Records() {
               <option value="">All Types</option>
               <option value="NO_HELMET">No Helmet</option>
               <option value="TRIPLE_RIDING">Triple Riding</option>
+              <option value="SEATBELT_VIOLATION">Seatbelt Violation</option>
+              <option value="WRONG_SIDE_DRIVING">Wrong-Side Driving</option>
             </select>
           </div>
           <div className="flex gap-2">
@@ -135,9 +139,11 @@ export default function Records() {
                     <td className="p-4 text-trinetra-text text-sm capitalize">{r.vehicle_type || '—'}</td>
                     <td className="p-4">
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                        r.violation_type === 'NO_HELMET'
-                          ? 'bg-red-500/10 text-red-400'
-                          : 'bg-amber-500/10 text-amber-400'
+                        r.violation_type === 'NO_HELMET' ? 'bg-red-500/10 text-red-400' :
+                        r.violation_type === 'TRIPLE_RIDING' ? 'bg-amber-500/10 text-amber-400' :
+                        r.violation_type === 'SEATBELT_VIOLATION' ? 'bg-orange-500/10 text-orange-400' :
+                        r.violation_type === 'WRONG_SIDE_DRIVING' ? 'bg-purple-500/10 text-purple-400' :
+                        'bg-gray-500/10 text-gray-400'
                       }`}>
                         {r.violation_type.replace('_', ' ')}
                       </span>

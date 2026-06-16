@@ -37,6 +37,8 @@ export default function Upload() {
   const violationColors: Record<string, string> = {
     NO_HELMET: 'text-red-400 border-red-500/30 bg-red-500/10',
     TRIPLE_RIDING: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
+    SEATBELT_VIOLATION: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
+    WRONG_SIDE_DRIVING: 'text-purple-400 border-purple-500/30 bg-purple-500/10',
   }
 
   return (

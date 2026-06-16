@@ -10,6 +10,8 @@ interface Message {
 const HELPER_TEXT = `I can answer questions like:
 • Show helmet violations
 • Show triple riding cases
+• Show seatbelt violations
+• Show wrong-side driving cases
 • Show repeat offenders
 • Show violation statistics
 • Show violations today
@@ -33,6 +35,8 @@ async function processQuery(query: string): Promise<string> {
       `**Total Violations:** ${stats.total}`,
       `**No Helmet:** ${stats.no_helmet}`,
       `**Triple Riding:** ${stats.triple_riding}`,
+      `**Seatbelt Violations:** ${stats.seatbelt_offence}`,
+      `**Wrong-Side Driving:** ${stats.wrong_side}`,
       `**Unique Vehicles:** ${stats.unique_vehicles}`,
     ].join('\n')
   }
@@ -52,6 +56,16 @@ async function processQuery(query: string): Promise<string> {
   if (q.includes('triple') || q.includes('triple riding')) {
     const res = await getViolations({ violation_type: 'TRIPLE_RIDING', limit: 100 })
     return `Found **${res.total}** triple riding violations.`
+  }
+
+  if (q.includes('seatbelt') || q.includes('seat belt')) {
+    const res = await getViolations({ violation_type: 'SEATBELT_VIOLATION', limit: 100 })
+    return `Found **${res.total}** seatbelt violations.`
+  }
+
+  if (q.includes('wrong side') || q.includes('wrong-side')) {
+    const res = await getViolations({ violation_type: 'WRONG_SIDE_DRIVING', limit: 100 })
+    return `Found **${res.total}** wrong-side driving violations.`
   }
 
   if (q.includes('repeat') || q.includes('top') || q.includes('offender')) {

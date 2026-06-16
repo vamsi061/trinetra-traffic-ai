@@ -45,6 +45,8 @@ export interface ViolationStats {
   total: number
   no_helmet: number
   triple_riding: number
+  seatbelt_offence: number
+  wrong_side: number
   unique_vehicles: number
 }
 

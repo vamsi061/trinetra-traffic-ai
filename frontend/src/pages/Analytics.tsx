@@ -17,7 +17,13 @@ export default function Analytics() {
     getAnalytics().then(setData)
   }, [])
 
-  const typeData = (data?.by_type || []).map(d => ({ ...d, name: d.type === 'NO_HELMET' ? 'No Helmet' : 'Triple Riding' }))
+  const typeNameMap: Record<string, string> = {
+    NO_HELMET: 'No Helmet',
+    TRIPLE_RIDING: 'Triple Riding',
+    SEATBELT_VIOLATION: 'Seatbelt',
+    WRONG_SIDE_DRIVING: 'Wrong Side',
+  }
+  const typeData = (data?.by_type || []).map(d => ({ ...d, name: typeNameMap[d.type] || d.type.replace('_', ' ') }))
   const dayData = data?.by_day || []
   const offenderData = (data?.repeat_offenders || []).filter(o => o.vehicle)
   const monthData = data?.monthly_trend || []
@@ -28,11 +34,13 @@ export default function Analytics() {
       <p className="text-trinetra-muted mb-8">Visual insights from traffic violation data</p>
 
       {stats && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 mb-6 sm:mb-8">
           {[
-            { label: 'Total Violations', value: stats.total },
-            { label: 'No Helmet Cases', value: stats.no_helmet },
-            { label: 'Triple Riding Cases', value: stats.triple_riding },
+            { label: 'Total', value: stats.total },
+            { label: 'No Helmet', value: stats.no_helmet },
+            { label: 'Triple Riding', value: stats.triple_riding },
+            { label: 'Seatbelt', value: stats.seatbelt_offence },
+            { label: 'Wrong Side', value: stats.wrong_side },
           ].map(s => (
             <div key={s.label} className="glass rounded-xl p-5 border-l-4 border-l-red-500">
               <div className="text-sm text-trinetra-muted">{s.label}</div>

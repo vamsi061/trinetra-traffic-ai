@@ -13,6 +13,8 @@ COLORS = {
     'truck': (255, 0, 255),
     'violation': (0, 0, 255),
     'plate': (0, 255, 255),
+    'seatbelt': (0, 165, 255),
+    'wrong_side': (255, 0, 255),
     'default': (255, 255, 255),
 }
 
@@ -54,6 +56,22 @@ def generate_evidence(original_image, detections, violations, plate_info):
                 cv2.rectangle(image, (x1, y1), (x2, y2), (0, 165, 255), 2)
                 cv2.putText(image, 'RIDER', (x1, y1 - 5),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 165, 255), 2)
+        elif vtype == 'SEATBELT_VIOLATION':
+            if 'person_bbox' in violation:
+                x1, y1, x2, y2 = [int(v) for v in violation['person_bbox']]
+                cv2.rectangle(image, (x1, y1), (x2, y2), COLORS['seatbelt'], 3)
+                torso_y1 = y1 + int((y2 - y1) * 0.2)
+                torso_y2 = y1 + int((y2 - y1) * 0.55)
+                cv2.rectangle(image, (x1, torso_y1), (x2, torso_y2),
+                              COLORS['seatbelt'], 1)
+                cv2.putText(image, 'NO SEATBELT', (x1, y1 - 25),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, COLORS['seatbelt'], 2)
+        elif vtype == 'WRONG_SIDE_DRIVING':
+            if 'vehicle_bbox' in violation:
+                x1, y1, x2, y2 = [int(v) for v in violation['vehicle_bbox']]
+                cv2.rectangle(image, (x1, y1), (x2, y2), COLORS['wrong_side'], 3)
+                cv2.putText(image, 'WRONG SIDE', (x1, y1 - 25),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, COLORS['wrong_side'], 2)
 
     if plate_info and plate_info[0]:
         plate_text, plate_conf = plate_info

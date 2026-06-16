@@ -13,6 +13,8 @@ from utils.image_processing import enhance_image
 from ai.detector import ObjectDetector
 from ai.helmet_detector import check_helmet_violation
 from ai.triple_riding import check_triple_riding
+from ai.seatbelt_detector import check_seatbelt_violation
+from ai.wrong_side_detector import check_wrong_side_violation
 from ai.ocr import LicensePlateReader
 from ai.evidence_generator import generate_evidence
 from database.db import (
@@ -42,12 +44,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─── Health ───────────────────────────────────────────────────────────
 @app.get("/api/health")
 def health():
     return {"status": "operational", "service": "TRINETRA AI", "version": "2.0.0"}
 
-# ─── Detection ────────────────────────────────────────────────────────
 @app.post("/api/detect")
 async def detect_violations(file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
@@ -69,10 +69,11 @@ async def detect_violations(file: UploadFile = File(...)):
     detections = detector.detect(processed)
 
     violations = []
-    for v in check_helmet_violation(detections, processed):
-        violations.append(v)
-    for v in check_triple_riding(detections):
-        violations.append(v)
+    for fn in [check_helmet_violation, check_triple_riding,
+               check_seatbelt_violation, check_wrong_side_violation]:
+        args = [detections, processed] if fn in [check_helmet_violation, check_seatbelt_violation, check_wrong_side_violation] else [detections]
+        for v in fn(*args):
+            violations.append(v)
 
     plate_text, plate_conf = "", 0.0
     vehicles = detector.detect_vehicles(processed)
@@ -117,7 +118,6 @@ async def detect_violations(file: UploadFile = File(...)):
         "evidence_path": os.path.basename(evidence_path) if evidence_path else None,
     }
 
-# ─── Violations ──────────────────────────────────────────────────────
 @app.get("/api/violations")
 def list_violations(
     vehicle_number: str = Query(None),
@@ -151,7 +151,6 @@ def violation_analytics():
         "monthly_trend": get_monthly_trend(),
     }
 
-# ─── Evidence ─────────────────────────────────────────────────────────
 @app.get("/api/evidence/{filename}")
 def get_evidence(filename: str):
     filepath = os.path.join(config.EVIDENCE_DIR, filename)
@@ -159,7 +158,6 @@ def get_evidence(filename: str):
         raise HTTPException(404, "Evidence not found")
     return FileResponse(filepath, media_type="image/jpeg")
 
-# ─── Frontend SPA ────────────────────────────────────────────────────
 if FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
 

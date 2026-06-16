@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { TrafficCone, Shield, Car, AlertTriangle } from 'lucide-react'
+import { TrafficCone, Shield, Car, AlertTriangle, Users, ArrowLeftRight } from 'lucide-react'
 import MetricCard from '../components/MetricCard'
 import { getStats, getRecentViolations, ViolationStats, ViolationRecord } from '../api/client'
 
@@ -31,10 +31,12 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-6 sm:mb-8">
         <MetricCard label="Total Violations" value={stats?.total ?? '—'} icon={<AlertTriangle className="w-4 h-4" />} color="red" />
-        <MetricCard label="Helmet Violations" value={stats?.no_helmet ?? '—'} icon={<Shield className="w-4 h-4" />} color="red" />
-        <MetricCard label="Triple Riding" value={stats?.triple_riding ?? '—'} icon={<Car className="w-4 h-4" />} color="green" />
+        <MetricCard label="No Helmet" value={stats?.no_helmet ?? '—'} icon={<Shield className="w-4 h-4" />} color="red" />
+        <MetricCard label="Triple Riding" value={stats?.triple_riding ?? '—'} icon={<Users className="w-4 h-4" />} color="amber" />
+        <MetricCard label="Seatbelt Offence" value={stats?.seatbelt_offence ?? '—'} icon={<Car className="w-4 h-4" />} color="orange" />
+        <MetricCard label="Wrong Side" value={stats?.wrong_side ?? '—'} icon={<ArrowLeftRight className="w-4 h-4" />} color="purple" />
         <MetricCard label="Unique Vehicles" value={stats?.unique_vehicles ?? '—'} icon={<Car className="w-4 h-4" />} color="blue" />
       </div>
 
@@ -45,7 +47,9 @@ export default function Home() {
             {[
               { name: 'No Helmet', desc: 'Detects motorcycle riders without helmets using YOLO-based head region analysis', color: 'border-l-red-500' },
               { name: 'Triple Riding', desc: 'Identifies motorcycles carrying more than 2 persons via IoU analysis', color: 'border-l-amber-500' },
-              { name: 'License Plate OCR', desc: 'Extracts vehicle numbers using EasyOCR with contour-based plate detection', color: 'border-l-green-500' },
+              { name: 'Seatbelt Violation', desc: 'Detects vehicle occupants not wearing seatbelts using torso ROI + Hough line analysis', color: 'border-l-orange-500' },
+              { name: 'Wrong-Side Driving', desc: 'Detects vehicles driving on wrong side using lane line detection + vehicle positioning', color: 'border-l-purple-500' },
+              { name: 'License Plate OCR', desc: 'Extracts vehicle numbers using EasyOCR + contour-based plate detection', color: 'border-l-green-500' },
             ].map(v => (
               <div key={v.name} className={`bg-[#1a2040] rounded-lg p-4 border-l-4 ${v.color}`}>
                 <h3 className="font-medium text-white">{v.name}</h3>

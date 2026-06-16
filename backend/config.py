@@ -9,6 +9,9 @@ DB_PATH = os.path.join(DATA_DIR, 'database.db')
 YOLO_MODEL_NAME = 'yolov8n.pt'
 CONFIDENCE_THRESHOLD = 0.4
 OCR_CONFIDENCE_THRESHOLD = 0.3
+SEATBELT_IoU_THRESHOLD = 0.1
+SEATBELT_LINE_THRESHOLD = 30
+LANE_ANGLE_THRESHOLD = 25
 
 VEHICLE_CLASSES = {
     2: 'car',
@@ -19,6 +22,7 @@ VEHICLE_CLASSES = {
 
 PERSON_CLASS_ID = 0
 MOTORCYCLE_CLASS_ID = 3
+CAR_CLASS_ID = 2
 
 CLASS_NAMES = {
     0: 'person',
@@ -32,6 +36,8 @@ CLASS_NAMES = {
 VIOLATION_TYPES = {
     'NO_HELMET': 'No Helmet',
     'TRIPLE_RIDING': 'Triple Riding',
+    'SEATBELT_VIOLATION': 'Seatbelt Violation',
+    'WRONG_SIDE_DRIVING': 'Wrong-Side Driving',
 }
 
 HELMET_COLORS_HSV = {

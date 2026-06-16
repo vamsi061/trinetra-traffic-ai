@@ -96,6 +96,10 @@ def get_statistics():
     stats['no_helmet'] = cursor.fetchone()[0]
     cursor.execute("SELECT COUNT(*) FROM violations WHERE violation_type='TRIPLE_RIDING'")
     stats['triple_riding'] = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM violations WHERE violation_type='SEATBELT_VIOLATION'")
+    stats['seatbelt_offence'] = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM violations WHERE violation_type='WRONG_SIDE_DRIVING'")
+    stats['wrong_side'] = cursor.fetchone()[0]
     cursor.execute("SELECT COUNT(DISTINCT vehicle_number) FROM violations WHERE vehicle_number != ''")
     stats['unique_vehicles'] = cursor.fetchone()[0]
     conn.close()
