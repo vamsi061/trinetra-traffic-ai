@@ -41,7 +41,6 @@ export default function Analytics() {
             { label: 'No Helmet', value: stats.no_helmet },
             { label: 'Triple Riding', value: stats.triple_riding },
             { label: 'Overloading', value: (stats.motorcycle_overloading || 0) + (stats.motorcycle_extreme_overloading || 0) },
-            { label: 'Wrong Side', value: stats.wrong_side },
           ].map(s => (
             <div key={s.label} className="glass rounded-xl p-5 border-l-4 border-l-red-500">
               <div className="text-sm text-trinetra-muted">{s.label}</div>

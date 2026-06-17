@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload as UploadIcon, AlertTriangle, CheckCircle, Search, Users, Shield, FileText, Eye, ThumbsUp, Bug, ChevronDown, ChevronUp, BarChart3, Activity } from 'lucide-react'
+import { Upload as UploadIcon, AlertTriangle, CheckCircle, Search, Users, Shield, FileText, Eye, ThumbsUp, Bug, ChevronDown, ChevronUp, BarChart3, Activity, Presentation } from 'lucide-react'
 import { uploadImage, getEvidenceUrl } from '../api/client'
 import type { DetectResponse, ReliabilityBadge } from '../api/client'
 
@@ -42,17 +42,28 @@ function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
   const totalOccupants = result.motorcycle_riders?.reduce((s, mr) => s + mr.rider_count, 0) || 0
   const violations = result.violations.length
   const needsReview = result.violations.some(v => v.human_review_status !== 'auto_confirmed')
+
+  // Compute reliability from results
+  const avgConf = result.violations.length > 0
+    ? result.violations.reduce((s, v) => s + v.confidence, 0) / result.violations.length
+    : (result.detections.length > 0 ? result.detections.reduce((s, d) => s + d.confidence, 0) / result.detections.length : 0)
+  const crowded = result.crowded_scene
+  let reliability = 'High', reliabilityReason = 'Clear detection with strong confidence.'
+  if (crowded) { reliability = 'Limited'; reliabilityReason = 'Crowded scene with overlapping occupants.' }
+  else if (avgConf < 0.6) { reliability = 'Low'; reliabilityReason = 'Low detection confidence. Verification recommended.' }
+  else if (avgConf < 0.8) { reliability = 'Medium'; reliabilityReason = 'Moderate detection confidence.' }
+
   const topRec = result.violations[0]?.enforcement_recommendation?.split('.')[0] || 'No action required'
 
   return (
     <div className="glass rounded-xl p-5 border-l-4 border-l-blue-500">
       <h3 className="text-sm font-semibold text-blue-400 mb-4 flex items-center gap-2">
-        <BarChart3 className="w-4 h-4" /> Executive Summary
+        <BarChart3 className="w-4 h-4" /> Traffic Intelligence Summary
       </h3>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
-          <div className="text-xs text-trinetra-muted mb-1">Vehicles Detected</div>
-          <div className="text-xl font-bold text-white">{vehiclesDetected}</div>
+          <div className="text-xs text-trinetra-muted mb-1">Motorcycles Detected</div>
+          <div className="text-xl font-bold text-white">{result.detections.filter(d => d.label === 'motorcycle').length}</div>
         </div>
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
           <div className="text-xs text-trinetra-muted mb-1">Estimated Occupants</div>
@@ -76,8 +87,17 @@ function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
           </div>
         </div>
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
-          <div className="text-xs text-trinetra-muted mb-1">Recommended Action</div>
-          <div className="text-xs font-medium text-blue-300 leading-tight">{topRec}</div>
+          <div className="text-xs text-trinetra-muted mb-1">Reliability</div>
+          <div className={`text-sm font-bold ${
+            reliability === 'High' ? 'text-green-400' :
+            reliability === 'Medium' ? 'text-yellow-400' :
+            reliability === 'Limited' ? 'text-orange-400' : 'text-red-400'
+          }`}>{reliability}</div>
+          <div className="text-[10px] text-trinetra-muted mt-0.5 truncate max-w-[80px]">{reliabilityReason}</div>
+        </div>
+        <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+          <div className="text-xs text-trinetra-muted mb-1">Recommended Response</div>
+          <div className="text-[10px] font-medium text-blue-300 leading-tight">{topRec}</div>
         </div>
       </div>
     </div>
@@ -90,6 +110,7 @@ export default function Upload() {
   const [preview, setPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showDebug, setShowDebug] = useState(false)
+  const [judgeMode, setJudgeMode] = useState(false)
 
   const onDrop = useCallback(async (accepted: File[]) => {
     const file = accepted[0]
@@ -100,7 +121,6 @@ export default function Upload() {
     setLoading(true)
     try {
       const res = await uploadImage(file)
-      // Debug logging for dashboard data flow
       const motorcycles = res.detections.filter(d => d.label === 'motorcycle')
       const persons = res.detections.filter(d => d.label === 'person')
       const totalOccupants = res.motorcycle_riders?.reduce((s, mr) => s + mr.rider_count, 0) || 0
@@ -110,29 +130,12 @@ export default function Upload() {
       console.log('estimated_occupants:', totalOccupants)
       console.log('detected_violations:', res.violations.length)
       console.log('risk_score:', res.risk_score)
-      console.log('risk_status:', res.risk_status)
       console.log('crowded_scene:', res.crowded_scene)
       console.log('ai_review_recommended:', res.ai_review_recommended)
-      if (res.violations.length > 0) {
-        console.log('violation_details:', res.violations.map(v => ({
-          type: v.type,
-          confidence: v.confidence,
-          band: v.confidence_band,
-          label: v.confidence_label,
-          review: v.human_review_status,
-          reliability: v.reliability_badge?.label,
-        })))
-      }
-      if (res.motorcycle_riders && res.motorcycle_riders.length > 0) {
-        console.log('rider_details:', res.motorcycle_riders.map(mr => ({
-          count: mr.rider_count,
-          estimate: mr.occupancy_estimate,
-        })))
-      }
       console.log('================================')
       setResult(res)
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Analysis failed. Check backend connection.')
+      setError(e?.response?.data?.detail || 'Analysis failed.')
     } finally {
       setLoading(false)
     }
@@ -146,8 +149,23 @@ export default function Upload() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-white mb-2">Traffic Image Analysis</h1>
-      <p className="text-trinetra-muted mb-8">Upload a traffic image for AI-powered enforcement intelligence</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Traffic Image Analysis</h1>
+          <p className="text-trinetra-muted text-sm">Upload for AI-powered enforcement intelligence</p>
+        </div>
+        {result && !loading && (
+          <button
+            onClick={() => setJudgeMode(!judgeMode)}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all ${
+              judgeMode ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-[#1a2040] text-trinetra-muted hover:text-white'
+            }`}
+          >
+            <Presentation className="w-3.5 h-3.5" />
+            {judgeMode ? 'Judge Mode ON' : 'Judge Mode'}
+          </button>
+        )}
+      </div>
 
       <div
         {...getRootProps()}
@@ -167,7 +185,7 @@ export default function Upload() {
               <p className="text-sm sm:text-lg text-trinetra-text text-center px-4">
                 Drag & drop a traffic image, or <span className="text-red-400 underline cursor-pointer">browse</span>
               </p>
-              <p className="text-xs sm:text-sm text-trinetra-muted">Supports JPG, PNG, BMP, WebP</p>
+              <p className="text-xs sm:text-sm text-trinetra-muted">JPG, PNG, BMP, WebP supported</p>
             </>
           )}
         </div>
@@ -209,64 +227,35 @@ export default function Upload() {
 
       {result && !loading && (
         <div className="space-y-6 mt-8">
-          {/* Executive Summary */}
+          {/* Executive Summary — always shown */}
           <ExecutiveSummaryCard result={result} />
 
-          {/* Debug Toggle */}
-          <button
-            onClick={() => setShowDebug(!showDebug)}
-            className="flex items-center gap-2 text-xs text-trinetra-muted hover:text-trinetra-text transition-colors"
-          >
-            <Bug className="w-3 h-3" />
-            {showDebug ? 'Hide' : 'Show'} Developer Diagnostics
-            {showDebug ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-          </button>
+          {/* Developer Diagnostics — hidden by default (Officer Mode) */}
+          {!judgeMode && (
+            <button
+              onClick={() => setShowDebug(!showDebug)}
+              className="flex items-center gap-2 text-xs text-trinetra-muted hover:text-trinetra-text transition-colors"
+            >
+              <Bug className="w-3 h-3" />
+              {showDebug ? 'Hide' : 'Show'} Developer Diagnostics
+              {showDebug ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+          )}
 
-          {/* Developer Diagnostics Panel */}
-          {showDebug && (
+          {showDebug && !judgeMode && (
             <div className="glass rounded-xl p-6 border border-yellow-500/20">
               <h3 className="text-sm font-semibold text-yellow-400 mb-3 flex items-center gap-2">
-                <Bug className="w-4 h-4" /> Developer Diagnostics Mode
+                <Bug className="w-4 h-4" /> Developer Diagnostics
               </h3>
-              {result.detections.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-xs text-trinetra-muted mb-2">All Detected Objects</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {result.detections.map((d, i) => (
-                      <div key={i} className="bg-[#1a2040] rounded-lg p-2 flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="text-trinetra-muted font-mono">{d.instance_id}</span>
-                          <span className="text-white capitalize">{d.label}</span>
-                        </div>
-                        <span className="text-trinetra-muted">{(d.confidence * 100).toFixed(0)}%</span>
-                      </div>
-                    ))}
-                  </div>
+              {result.detections.map((d, i) => (
+                <div key={i} className="bg-[#1a2040] rounded-lg p-2 flex items-center justify-between text-xs mb-1">
+                  <span className="text-trinetra-muted font-mono">{d.instance_id}</span>
+                  <span className="text-white capitalize">{d.label} ({(d.confidence * 100).toFixed(0)}%)</span>
                 </div>
-              )}
-              {result.motorcycle_riders?.length > 0 && (
-                <div>
-                  <h4 className="text-xs text-trinetra-muted mb-2">Association Details</h4>
-                  {result.motorcycle_riders.map((mr, i) => (
-                    <div key={i} className="bg-[#1a2040] rounded-lg p-3 mb-2 text-xs">
-                      <div className="text-amber-400 font-mono mb-1">{mr.motorcycle_id}</div>
-                      <div className="text-trinetra-text">Occupants: {mr.riders.join(', ') || 'None'} | Score: {mr.rider_count}</div>
-                      {mr.assignment_scores && Object.keys(mr.assignment_scores).length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {Object.entries(mr.assignment_scores).map(([rid, sc]) => (
-                            <span key={rid} className="bg-yellow-500/10 text-yellow-400 px-1.5 py-0.5 rounded font-mono">
-                              {rid}: {(sc as number * 100).toFixed(0)}%
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+              ))}
               {result.ai_review_recommended && (
-                <div className="mt-3 p-2 rounded bg-amber-500/10 text-amber-300 text-xs">
-                  AI Review Flagged: {result.crowded_scene ? 'Crowded scene' : 'Needs human verification'}
+                <div className="mt-2 p-2 rounded bg-amber-500/10 text-amber-300 text-xs">
+                  Flagged: {result.crowded_scene ? 'Crowded scene' : 'Needs verification'}
                 </div>
               )}
             </div>
@@ -287,10 +276,10 @@ export default function Upload() {
               )}
             </div>
 
-            {result.ai_review_recommended && (
+            {result.ai_review_recommended && !judgeMode && (
               <div className="mb-4 p-3 rounded-lg border bg-amber-500/10 border-amber-500/30 text-amber-300 text-sm flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>{result.crowded_scene ? 'Crowded scene detected — Manual verification required before enforcement action.' : 'Some violations require human review.'}</span>
+                <span>{result.crowded_scene ? 'Crowded scene — Manual verification required.' : 'Some violations require review.'}</span>
               </div>
             )}
 
@@ -302,11 +291,10 @@ export default function Upload() {
                     v.type === 'TRIPLE_RIDING' ? 'border-amber-500/30 bg-amber-500/5' :
                     v.type === 'MOTORCYCLE_OVERLOADING' ? 'border-rose-500/30 bg-rose-500/5' :
                     v.type === 'MOTORCYCLE_EXTREME_OVERLOADING' ? 'border-pink-500/30 bg-pink-500/5' :
-                    v.type === 'WRONG_SIDE_DRIVING' ? 'border-purple-500/30 bg-purple-500/5' :
                     'border-trinetra-border'
                   }`}>
                     <div className="p-4">
-                      {/* Header row */}
+                      {/* Simplified header: Type + Confidence + Risk */}
                       <div className="flex items-start justify-between flex-wrap gap-2 mb-3">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-white text-sm">
@@ -314,7 +302,6 @@ export default function Upload() {
                              v.type === 'TRIPLE_RIDING' ? 'Triple Riding' :
                              v.type === 'MOTORCYCLE_OVERLOADING' ? 'Overloading' :
                              v.type === 'MOTORCYCLE_EXTREME_OVERLOADING' ? 'Extreme Overloading' :
-                             v.type === 'WRONG_SIDE_DRIVING' ? 'Wrong-Side Driving' :
                              v.type.replace(/_/g, ' ')}
                           </span>
                           <ConfidenceBadge band={v.confidence_band} label={v.confidence_label} />
@@ -332,21 +319,11 @@ export default function Upload() {
                         </div>
                       </div>
 
-                      {/* Occupancy estimate */}
-                      {v.occupancy_estimate && (
-                        <div className="mb-3 text-sm">
-                          <span className="bg-[#0d1225] text-trinetra-text px-3 py-1 rounded">
-                            <Users className="w-3.5 h-3.5 inline mr-1.5" />
-                            {v.occupancy_estimate}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Explanation */}
+                      {/* Reason (Explainable) */}
                       {v.explainable_reason && (
                         <div className="mb-3 p-3 rounded-lg bg-[#0d1225] border border-trinetra-border">
                           <div className="flex items-center gap-1.5 text-xs text-trinetra-muted mb-1">
-                            <FileText className="w-3 h-3" /> Analysis
+                            <FileText className="w-3 h-3" /> Reason
                           </div>
                           <p className="text-sm text-trinetra-text">{v.explainable_reason}</p>
                         </div>
@@ -356,9 +333,24 @@ export default function Upload() {
                       {v.enforcement_recommendation && (
                         <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
                           <div className="flex items-center gap-1.5 text-xs text-blue-400 mb-1">
-                            <Shield className="w-3 h-3" /> Recommended Action
+                            <Shield className="w-3 h-3" /> Recommended Response
                           </div>
                           <p className="text-sm text-trinetra-text">{v.enforcement_recommendation}</p>
+                        </div>
+                      )}
+
+                      {/* Judge Mode: show business value summary */}
+                      {judgeMode && (
+                        <div className="mt-3 p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
+                          <div className="flex items-center gap-1.5 text-xs text-purple-400 mb-1">
+                            <Presentation className="w-3 h-3" /> Business Value
+                          </div>
+                          <p className="text-sm text-trinetra-text">
+                            AI-assisted detection enables <strong className="text-white">targeted enforcement</strong> with
+                            {' '}{v.confidence_label} ({v.reliability_badge?.label || 'N/A'} reliability).
+                            {' '}Estimated {v.occupancy_estimate || 'occupants unknown'}.
+                            {' '}Risk level: <strong className="text-white">{v.severity_score || 'N/A'}</strong>.
+                          </p>
                         </div>
                       )}
                     </div>
@@ -373,7 +365,6 @@ export default function Upload() {
             )}
           </div>
 
-          {/* License Plate */}
           {result.license_plate && (
             <div className="glass rounded-xl p-6">
               <h3 className="text-lg font-semibold text-white mb-4">License Plate</h3>
@@ -383,7 +374,7 @@ export default function Upload() {
                 </div>
                 <div>
                   <div className="text-2xl font-bold text-white tracking-wider">{result.license_plate.number}</div>
-                  <div className="text-sm text-trinetra-muted">OCR Confidence: {(result.license_plate.confidence * 100).toFixed(0)}%</div>
+                  <div className="text-sm text-trinetra-muted">Confidence: {(result.license_plate.confidence * 100).toFixed(0)}%</div>
                 </div>
               </div>
             </div>

@@ -148,7 +148,6 @@ export default function Home() {
                 { label: 'No Helmet', count: stats!.no_helmet, color: 'bg-red-500', text: 'text-red-400' },
                 { label: 'Triple Riding', count: stats!.triple_riding, color: 'bg-amber-500', text: 'text-amber-400' },
                 { label: 'Overloading', count: (stats!.motorcycle_overloading || 0) + (stats!.motorcycle_extreme_overloading || 0), color: 'bg-rose-500', text: 'text-rose-300' },
-                { label: 'Wrong-Side Driving', count: stats!.wrong_side, color: 'bg-purple-500', text: 'text-purple-400' },
               ].map(item => {
                 const pct = ((item.count / stats!.total) * 100).toFixed(1)
                 return (

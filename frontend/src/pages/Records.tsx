@@ -56,8 +56,6 @@ export default function Records() {
             { label: 'Total', value: stats.total, color: 'border-l-red-500' },
             { label: 'No Helmet', value: stats.no_helmet, color: 'border-l-red-500' },
             { label: 'Triple Riding', value: stats.triple_riding, color: 'border-l-amber-500' },
-            { label: 'Seatbelt', value: stats.seatbelt_offence, color: 'border-l-orange-500' },
-            { label: 'Wrong Side', value: stats.wrong_side, color: 'border-l-purple-500' },
             { label: 'Unique Vehicles', value: stats.unique_vehicles, color: 'border-l-blue-500' },
           ].map(s => (
             <div key={s.label} className={`glass rounded-xl p-4 border-l-4 ${s.color}`}>
@@ -96,7 +94,6 @@ export default function Records() {
               <option value="TRIPLE_RIDING">Triple Riding</option>
               <option value="MOTORCYCLE_OVERLOADING">Motorcycle Overloading</option>
               <option value="MOTORCYCLE_EXTREME_OVERLOADING">Extreme Overloading</option>
-              <option value="WRONG_SIDE_DRIVING">Wrong-Side Driving</option>
             </select>
           </div>
           <div className="flex gap-2">

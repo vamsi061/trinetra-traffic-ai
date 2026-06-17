@@ -13,7 +13,7 @@ from utils.image_processing import enhance_image
 from ai.locate_anything import LocateAnythingDetector
 from ai.helmet_detector import check_helmet_violation
 from ai.triple_riding import check_triple_riding
-from ai.wrong_side_detector import check_wrong_side_violation
+
 from ai.rider_association import associate_riders, classify_occupancy
 from ai.ocr import LicensePlateReader
 from ai.evidence_generator import generate_evidence
@@ -80,24 +80,20 @@ def _review_status(v):
 # ————— Enforcement Recommendations —————
 ENFORCEMENT_RECS = {
     'NO_HELMET': {
-        'action': 'Suggested Enforcement Response: Issue advisory notice for helmet non-compliance. Recommend follow-up verification at next checkpoint.',
-        'escalation': 'Monitor repeat violations. Officer follow-up recommended for persistent offenders.',
+        'action': 'Officer Review Recommended: Advisory notice for helmet non-compliance. Consider follow-up verification at next checkpoint.',
+        'escalation': 'Monitor repeat cases. Officer follow-up recommended for persistent offenders.',
     },
     'TRIPLE_RIDING': {
-        'action': 'Suggested Enforcement Response: On-site assessment recommended. Document occupancy for records.',
-        'escalation': 'School zone: notify traffic education unit. Repeat violations: schedule enforcement drive.',
+        'action': 'Officer Review Recommended: On-site assessment. Document occupancy for records.',
+        'escalation': 'School zone: notify traffic education unit. Repeat cases: schedule enforcement drive.',
     },
     'MOTORCYCLE_OVERLOADING': {
-        'action': 'Suggested Enforcement Response: Document overloading with evidence. Officer review before further action.',
+        'action': 'Additional Evidence Suggested: Document overloading with evidence. Officer review before further action.',
         'escalation': 'Commercial vehicle: notify transport authority. Repeat: schedule vehicle inspection.',
     },
     'MOTORCYCLE_EXTREME_OVERLOADING': {
-        'action': 'Suggested Enforcement Response: Priority review recommended. Document all occupants. Public safety concern.',
+        'action': 'Vehicle Inspection Recommended: Priority review. Document all occupants. Public safety concern.',
         'escalation': 'Coordinate with traffic enforcement unit for vehicle inspection review.',
-    },
-    'WRONG_SIDE_DRIVING': {
-        'action': 'Suggested Enforcement Response: Verify at observed entry point. Consider barrier assessment.',
-        'escalation': 'Repeat location: coordinate with traffic engineering for infrastructure review.',
     },
 }
 
@@ -121,8 +117,7 @@ def _build_explainable_reason(violation_type, details):
         'NO_HELMET': f"{prefix} — No Helmet. Rider detected without protective headgear. {details.get('helmet_state', 'Helmet detection analysis completed.')}",
         'TRIPLE_RIDING': f"{prefix} — Triple Riding. {occ_est} associated with a single motorcycle.",
         'MOTORCYCLE_OVERLOADING': f"{prefix} — Motorcycle Overloading. {occ_est} detected — exceeds legal occupant limit.",
-        'MOTORCYCLE_EXTREME_OVERLOADING': f"{prefix} — Extreme Overloading. {occ_est} — immediate enforcement recommended.",
-        'WRONG_SIDE_DRIVING': f"{prefix} — Wrong-Side Driving. Vehicle detected traveling against designated traffic flow.",
+        'MOTORCYCLE_EXTREME_OVERLOADING': f"{prefix} — Extreme Overloading. {occ_est} — Vehicle inspection recommended.",
     }
     reason = reasons.get(violation_type, f'{prefix} — traffic violation detected.')
     status = _review_status(details)
@@ -199,7 +194,7 @@ async def detect_violations(file: UploadFile = File(...)):
 
     # Detect violations (seatbelt disabled — removed from pipeline)
     violations = []
-    for fn in [check_helmet_violation, check_triple_riding, check_wrong_side_violation]:
+    for fn in [check_helmet_violation, check_triple_riding]:
         for v in fn(detections, processed):
             v['confidence_band'] = v.get('confidence_band', 'medium')
             v['occupancy_estimate'] = _occupancy_estimate(v.get('rider_count', 0), v.get('confidence', 0))
@@ -478,6 +473,12 @@ def executive_summary():
     total_risk = sum(o.get('risk_score', 0) for o in offenders)
     avg_risk = round(total_risk / len(offenders), 1) if offenders else 0
 
+    # Compute overall reliability
+    total = stats.get('total', 0)
+    all_v = get_all_violations()
+    high_conf = sum(1 for v in all_v if getattr(v, 'confidence', 0) >= 0.8) if all_v else 0
+    reliability = 'High' if total > 0 and high_conf / total >= 0.7 else ('Medium' if total > 0 and high_conf / total >= 0.4 else 'Low') if total > 0 else 'N/A'
+
     return {
         "total_violations": stats.get('total', 0),
         "unique_vehicles": stats.get('unique_vehicles', 0),
@@ -490,6 +491,7 @@ def executive_summary():
         "top_offender": offenders[0]['vehicle_number'] if offenders else None,
         "top_offender_count": offenders[0]['total_violations'] if offenders else 0,
         "average_risk_score": avg_risk,
+        "overall_reliability": reliability,
         "top_location": hotspots.get('by_location', [{}])[0].get('location', 'N/A') if hotspots.get('by_location') else 'N/A',
     }
 

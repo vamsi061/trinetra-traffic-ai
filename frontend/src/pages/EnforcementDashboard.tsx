@@ -130,7 +130,6 @@ export default function EnforcementDashboard() {
                 { label: 'No Helmet', count: stats?.no_helmet || 0, color: 'bg-red-500' },
                 { label: 'Triple Riding', count: stats?.triple_riding || 0, color: 'bg-amber-500' },
                 { label: 'Overloading', count: (stats?.motorcycle_overloading || 0) + (stats?.motorcycle_extreme_overloading || 0), color: 'bg-rose-500' },
-                { label: 'Wrong Side', count: stats?.wrong_side || 0, color: 'bg-purple-500' },
               ].map(item => {
                 const pct = stats?.total ? ((item.count / stats.total) * 100).toFixed(1) : '0'
                 return (
@@ -368,7 +367,6 @@ export default function EnforcementDashboard() {
                     <th className="text-center py-3 px-2">Total</th>
                     <th className="text-center py-3 px-2">Helmet</th>
                     <th className="text-center py-3 px-2">Overload</th>
-                    <th className="text-center py-3 px-2">Wrong Side</th>
                     <th className="text-center py-3 px-2">Risk Score</th>
                     <th className="text-center py-3 px-2">Status</th>
                     <th className="text-right py-3 px-2">Last Seen</th>
@@ -381,7 +379,6 @@ export default function EnforcementDashboard() {
                       <td className="py-3 px-2 text-center text-white">{o.total_violations}</td>
                       <td className="py-3 px-2 text-center text-trinetra-text">{o.helmet_violations}</td>
                       <td className="py-3 px-2 text-center text-trinetra-text">{o.overloading_violations}</td>
-                      <td className="py-3 px-2 text-center text-trinetra-text">{o.wrong_side_violations}</td>
                       <td className="py-3 px-2 text-center font-bold text-white">{o.risk_score}</td>
                       <td className="py-3 px-2 text-center">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${statusColor(o.risk_status)}`}>

@@ -93,8 +93,6 @@ export interface ViolationStats {
   total: number
   no_helmet: number
   triple_riding: number
-  seatbelt_offence: number
-  wrong_side: number
   motorcycle_overloading: number
   motorcycle_extreme_overloading: number
   unique_vehicles: number
@@ -116,8 +114,6 @@ export interface RepeatOffender {
   total_violations: number
   helmet_violations: number
   overloading_violations: number
-  seatbelt_violations: number
-  wrong_side_violations: number
   risk_score: number
   risk_status: string
   last_violation_date: string
@@ -261,6 +257,7 @@ export interface ExecutiveSummary {
   top_offender: string | null
   top_offender_count: number
   average_risk_score: number
+  overall_reliability: string
   top_location: string
 }
 
