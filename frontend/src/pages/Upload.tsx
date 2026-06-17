@@ -52,6 +52,7 @@ function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
   const occRange = occupantRange(result.motorcycle_riders || [])
   const violations = result.violations.length
   const needsReview = result.violations.some(v => v.human_review_status !== 'auto_confirmed')
+  const helmetCount = result.violations.filter(v => v.type === 'NO_HELMET').length
 
   // Compute reliability from results
   const avgConf = result.violations.length > 0
@@ -70,7 +71,7 @@ function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
       <h3 className="text-sm font-semibold text-blue-400 mb-4 flex items-center gap-2">
         <BarChart3 className="w-4 h-4" /> Traffic Intelligence Summary
       </h3>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3">
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
           <div className="text-xs text-trinetra-muted mb-1">Motorcycles Detected</div>
           <div className="text-xl font-bold text-white">{result.detections.filter(d => d.label === 'motorcycle').length}</div>
@@ -84,10 +85,16 @@ function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
           <div className={`text-xl font-bold ${violations > 0 ? 'text-red-400' : 'text-green-400'}`}>{violations}</div>
         </div>
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+          <div className="text-xs text-trinetra-muted mb-1">Helmet Non-Compliance</div>
+          <div className={`text-xl font-bold ${helmetCount > 0 ? 'text-orange-400' : 'text-green-400'}`}>{helmetCount}</div>
+        </div>
+        <div className="bg-[#1a2040] rounded-lg p-3 text-center">
           <div className="text-xs text-trinetra-muted mb-1">Risk Level</div>
           <div className={`text-xl font-bold ${
             result.risk_status === 'CRITICAL' ? 'text-red-300' :
-            result.risk_status === 'HIGH' ? 'text-orange-300' : 'text-yellow-300'
+            result.risk_status === 'HIGH' ? 'text-orange-300' :
+            result.risk_status === 'MODERATE' ? 'text-yellow-300' :
+            'text-green-300'
           }`}>{result.risk_status || 'NONE'}</div>
         </div>
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">

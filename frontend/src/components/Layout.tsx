@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
-  Home, Upload, FileText, BarChart3, Bot, TrafficCone, Menu, X, ShieldAlert, Radio,
+  Home, Upload, FileText, BarChart3, Bot, TrafficCone, Menu, X, ShieldAlert, Radio, CheckSquare,
 } from 'lucide-react'
 
 const navItems = [
   { to: '/', label: 'Home', icon: Home },
   { to: '/upload', label: 'Upload', icon: Upload },
+  { to: '/validation', label: 'Validation', icon: CheckSquare },
   { to: '/records', label: 'Records', icon: FileText },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/enforcement', label: 'Enforcement', icon: ShieldAlert },

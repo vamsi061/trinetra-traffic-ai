@@ -39,7 +39,6 @@ VIOLATION_TYPES = {
     'TRIPLE_RIDING': 'Triple Riding',
     'MOTORCYCLE_OVERLOADING': 'Motorcycle Overloading',
     'MOTORCYCLE_EXTREME_OVERLOADING': 'Extreme Overloading',
-    'WRONG_SIDE_DRIVING': 'Wrong-Side Driving',
 }
 
 RISK_SCORES = {
@@ -47,7 +46,6 @@ RISK_SCORES = {
     'TRIPLE_RIDING': 75,
     'MOTORCYCLE_OVERLOADING': 95,
     'MOTORCYCLE_EXTREME_OVERLOADING': 98,
-    'WRONG_SIDE_DRIVING': 50,
 }
 
 # Confidence thresholds

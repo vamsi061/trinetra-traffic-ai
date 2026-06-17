@@ -7,6 +7,7 @@ import Analytics from './pages/Analytics'
 import Copilot from './pages/Copilot'
 import EnforcementDashboard from './pages/EnforcementDashboard'
 import TrafficIntelligenceCenter from './pages/TrafficIntelligenceCenter'
+import Validation from './pages/Validation'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/enforcement" element={<EnforcementDashboard />} />
         <Route path="/intel-center" element={<TrafficIntelligenceCenter />} />
         <Route path="/copilot" element={<Copilot />} />
+        <Route path="/validation" element={<Validation />} />
       </Routes>
     </Layout>
   )

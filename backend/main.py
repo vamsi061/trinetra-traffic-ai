@@ -49,7 +49,9 @@ def _reliability_label(band, crowded=False):
         return {'label': 'Medium', 'reason': 'Moderate detection confidence.', 'color': 'bg-yellow-500/20 text-yellow-300'}
     if crowded:
         return {'label': 'Limited', 'reason': 'Crowded scene with multiple overlapping occupants.', 'color': 'bg-orange-500/20 text-orange-300'}
-    return {'label': 'Low', 'reason': 'Low detection confidence. Human verification recommended.', 'color': 'bg-red-500/20 text-red-300'}
+    if band == 'low':
+        return {'label': 'Low', 'reason': 'Low detection confidence. Human verification recommended.', 'color': 'bg-red-500/20 text-red-300'}
+    return {'label': 'Low', 'reason': 'Poor visibility or occlusion. Verification required.', 'color': 'bg-red-500/20 text-red-300'}
 
 def _helmet_compliance(v):
     """Analyze helmet detection result with confidence-based reporting."""
@@ -59,8 +61,13 @@ def _helmet_compliance(v):
         return None
     if hstate == 'NO_HELMET':
         band = 'high' if hconf >= 0.8 else ('medium' if hconf >= 0.6 else 'low')
+        label_map = {
+            'high': 'Probable Helmet Non-Compliance',
+            'medium': 'Possible Helmet Non-Compliance',
+            'low': 'Possible Helmet Non-Compliance',
+        }
         return {
-            'status': f'{_confidence_label(band)} — No Helmet',
+            'status': f'{label_map.get(band, "Possible Helmet Non-Compliance")}',
             'confidence_band': band,
             'needs_review': band in ('low',) or v.get('needs_review', False),
         }
@@ -98,7 +105,10 @@ ENFORCEMENT_RECS = {
 }
 
 # ————— Occupancy Estimate —————
-def _occupancy_estimate(rider_count, conf):
+def _occupancy_estimate(rider_count, conf, single_motorcycle=False):
+    # Sanity: single motorcycle with ≤3 visible riders → cap at "3 occupants"
+    if single_motorcycle and rider_count <= 3 and rider_count > 0:
+        return '3 occupants' if rider_count == 3 else f'{rider_count} occupant{"s" if rider_count != 1 else ""}'
     if conf >= 0.80:
         if rider_count <= 0:
             return 'No occupants detected'
@@ -127,8 +137,10 @@ def _occupancy_estimate(rider_count, conf):
 def _build_explainable_reason(violation_type, details):
     prefix = _confidence_label(details.get('confidence_band', 'medium'))
     occ_est = _occupancy_estimate(details.get('rider_count', 0), details.get('confidence', 0))
+    hc = details.get('helmet_compliance')
+    helmet_desc = hc['status'] if hc else ''
     reasons = {
-        'NO_HELMET': f"{prefix} — No Helmet. Rider detected without protective headgear. {details.get('helmet_state', 'Helmet detection analysis completed.')}",
+        'NO_HELMET': f"{prefix} — {helmet_desc}. Rider detected without visible protective headgear.",
         'TRIPLE_RIDING': f"{prefix} — Triple Riding. {occ_est} associated with a single motorcycle.",
         'MOTORCYCLE_OVERLOADING': f"{prefix} — Motorcycle Overloading. {occ_est} detected — exceeds legal occupant limit.",
         'MOTORCYCLE_EXTREME_OVERLOADING': f"{prefix} — Extreme Overloading. {occ_est} — Vehicle inspection recommended.",
@@ -206,12 +218,13 @@ async def detect_violations(file: UploadFile = File(...)):
     motorcycle_count = len([d for d in detections if d['label'] == 'motorcycle'])
     crowded_scene = person_count >= 6 or (person_count >= 4 and motorcycle_count >= 2)
 
-    # Detect violations (seatbelt disabled — removed from pipeline)
+    # Detect violations
     violations = []
     for fn in [check_helmet_violation, check_triple_riding]:
         for v in fn(detections, processed):
             v['confidence_band'] = v.get('confidence_band', 'medium')
-            v['occupancy_estimate'] = _occupancy_estimate(v.get('rider_count', 0), v.get('confidence', 0))
+            is_single_mc = len([d for d in detections if d['label'] == 'motorcycle']) == 1
+            v['occupancy_estimate'] = _occupancy_estimate(v.get('rider_count', 0), v.get('confidence', 0), single_motorcycle=is_single_mc)
             v['human_review_status'] = _review_status(v)
             rec = ENFORCEMENT_RECS.get(v["violation_type"], {})
             v['enforcement_recommendation'] = rec.get('action', 'Standard enforcement procedure.')
@@ -240,11 +253,12 @@ async def detect_violations(file: UploadFile = File(...)):
     mc_associations = associate_riders(persons_mc, motorcycles, processed.shape[:2])
     motorcycle_riders = []
     any_needs_review = False
+    is_single_mc = len(motorcycles) == 1
     for assoc in mc_associations:
         mc = assoc['motorcycle']
         riders = assoc['riders']
         occ = assoc.get('rider_count', 0)
-        occ_est = _occupancy_estimate(occ, 0.5)
+        occ_est = _occupancy_estimate(occ, 0.5, single_motorcycle=is_single_mc)
         motorcycle_riders.append({
             'motorcycle_id': mc['instance_id'],
             'motorcycle_bbox': [round(v, 1) for v in mc['bbox']],
@@ -260,10 +274,10 @@ async def detect_violations(file: UploadFile = File(...)):
 
     evidence_path = generate_evidence(processed, detections, violations, (plate_text, plate_conf))
 
-    total_risk = sum(v.get('severity_score', config.RISK_SCORES.get(v["violation_type"], 0)) for v in violations)
+    total_risk = min(sum(v.get('severity_score', config.RISK_SCORES.get(v["violation_type"], 0)) for v in violations), 100)
     risk_status = 'NONE'
     if total_risk > 0:
-        risk_status = 'MODERATE' if total_risk < 75 else ('HIGH' if total_risk < 120 else 'CRITICAL')
+        risk_status = 'LOW' if total_risk <= 25 else ('MODERATE' if total_risk <= 50 else ('HIGH' if total_risk <= 75 else 'CRITICAL'))
 
     location_hint = ''
     for v in violations:
@@ -316,6 +330,7 @@ async def detect_violations(file: UploadFile = File(...)):
         "risk_score": total_risk,
         "risk_status": risk_status,
         "crowded_scene": crowded_scene,
+        "helmet_non_compliance_count": len([v for v in violations if v["violation_type"] == "NO_HELMET"]),
         "ai_review_recommended": ai_review_needed,
         "operational_intelligence": {
             "mode": "Traffic Enforcement Intelligence Center",
@@ -507,6 +522,7 @@ def executive_summary():
         "average_risk_score": avg_risk,
         "overall_reliability": reliability,
         "top_location": hotspots.get('by_location', [{}])[0].get('location', 'N/A') if hotspots.get('by_location') else 'N/A',
+        "helmet_non_compliance_count": sum(1 for v in all_v if getattr(v, 'violation_type', '') == 'NO_HELMET') if all_v else 0,
     }
 
 
