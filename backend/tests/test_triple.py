@@ -8,13 +8,18 @@ from ai.detector import ObjectDetector
 
 
 class TestTripleRiding:
+    def _actual_violations(self, violations):
+        # Filter out NORMAL labels — only count actual violations
+        return [v for v in violations if v['violation_type'] not in ('NORMAL', 'NO_OCCUPANTS')]
+
     def test_no_violation_one_rider(self):
         detections = [
             {'bbox': [50, 50, 100, 180], 'confidence': 0.9, 'class_id': 0, 'label': 'person'},
             {'bbox': [40, 100, 160, 190], 'confidence': 0.85, 'class_id': 3, 'label': 'motorcycle'},
         ]
         violations = check_triple_riding(detections)
-        assert len(violations) == 0
+        assert len(self._actual_violations(violations)) == 0
+        assert any(v['violation_type'] == 'NORMAL' for v in violations)
 
     def test_no_violation_two_riders(self):
         detections = [
@@ -23,7 +28,8 @@ class TestTripleRiding:
             {'bbox': [40, 100, 160, 190], 'confidence': 0.85, 'class_id': 3, 'label': 'motorcycle'},
         ]
         violations = check_triple_riding(detections)
-        assert len(violations) == 0
+        assert len(self._actual_violations(violations)) == 0
+        assert any(v['violation_type'] == 'NORMAL' for v in violations)
 
     def test_violation_three_riders(self):
         detections = [
@@ -33,9 +39,10 @@ class TestTripleRiding:
             {'bbox': [40, 100, 160, 190], 'confidence': 0.85, 'class_id': 3, 'label': 'motorcycle'},
         ]
         violations = check_triple_riding(detections)
-        assert len(violations) >= 1
-        assert violations[0]['violation_type'] == 'TRIPLE_RIDING'
-        assert violations[0]['rider_count'] >= 3
+        actual = self._actual_violations(violations)
+        assert len(actual) >= 1
+        assert actual[0]['violation_type'] == 'TRIPLE_RIDING'
+        assert actual[0]['rider_count'] >= 3
 
     def test_no_motorcycle_no_violation(self):
         detections = [

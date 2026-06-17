@@ -24,8 +24,8 @@ class TestSeatbeltUtilities:
         assert is_person_in_car(person, car) == True
 
     def test_person_in_car_false(self):
-        person = [0, 0, 30, 60]
-        car = [300, 300, 400, 400]
+        person = [310, 350, 330, 400]   # person below car, clearly not inside
+        car = [100, 100, 250, 250]
         assert is_person_in_car(person, car) == False
 
 

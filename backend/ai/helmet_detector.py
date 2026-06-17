@@ -4,34 +4,43 @@ from ai.rider_association import associate_riders
 import config
 
 
+HELMET_STATE_PRESENT = 'HELMET_PRESENT'
+HELMET_STATE_ABSENT = 'NO_HELMET'
+HELMET_STATE_UNKNOWN = 'HELMET_UNKNOWN'
+
+
 def detect_helmet_in_head_region(image, person_bbox):
-    """Enhanced HSV-based helmet detection with multi-scale analysis."""
+    """Detect helmet in upper portion of person bbox.
+
+    Returns:
+        (state, confidence): state is one of HELMET_STATE_*, confidence 0-1
+    """
     x1, y1, x2, y2 = [int(v) for v in person_bbox]
     person_h = y2 - y1
     person_w = x2 - x1
 
     if person_h < 20 or person_w < 10:
-        return False, 0.0
+        return HELMET_STATE_UNKNOWN, 0.0
 
-    # Head region: upper 30% of person bbox (expanded from 25% to capture full head)
-    head_y2 = y1 + int(person_h * 0.30)
+    # Head region: upper 25% of person bbox
+    head_y2 = y1 + int(person_h * 0.25)
     head_region = image[y1:head_y2, x1:x2]
 
     if head_region.size == 0:
-        return False, 0.0
+        return HELMET_STATE_UNKNOWN, 0.0
 
     h, w = head_region.shape[:2]
     total_pixels = h * w
     if total_pixels == 0:
-        return False, 0.0
+        return HELMET_STATE_UNKNOWN, 0.0
 
     hsv = cv2.cvtColor(head_region, cv2.COLOR_BGR2HSV)
 
-    # Adaptive histogram equalization — only if image has enough variance
+    # CLAHE only for non-uniform regions
     hsv_eq = hsv
     try:
         gray_head = cv2.cvtColor(head_region, cv2.COLOR_BGR2GRAY)
-        if gray_head.std() > 15:  # skip CLAHE for near-uniform regions
+        if gray_head.std() > 15:
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
             enhanced = clahe.apply(gray_head)
             hsv_eq = cv2.cvtColor(cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR), cv2.COLOR_BGR2HSV)
@@ -47,8 +56,7 @@ def detect_helmet_in_head_region(image, person_bbox):
         mask = cv2.inRange(hsv, lower, upper)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-        helmet_pixels = cv2.countNonZero(mask)
-        ratio = helmet_pixels / total_pixels
+        ratio = cv2.countNonZero(mask) / total_pixels
 
         if hsv_eq is not hsv:
             mask_eq = cv2.inRange(hsv_eq, lower, upper)
@@ -60,10 +68,13 @@ def detect_helmet_in_head_region(image, person_bbox):
         if ratio > max_ratio:
             max_ratio = ratio
 
-    # Threshold 0.25 for helmet detection
-    has_helmet = max_ratio > 0.25
-    confidence = min(max_ratio * 1.5, 1.0)
-    return has_helmet, confidence
+    # Decision with uncertainty
+    if max_ratio > 0.35:
+        return HELMET_STATE_PRESENT, min(max_ratio * 1.2, 1.0)
+    elif max_ratio > 0.15:
+        return HELMET_STATE_PRESENT, max_ratio
+    else:
+        return HELMET_STATE_ABSENT, max_ratio
 
 
 def check_helmet_violation(detections, image):
@@ -77,11 +88,12 @@ def check_helmet_violation(detections, image):
     for assoc in associations:
         mc = assoc['motorcycle']
         for person in assoc['riders']:
-            has_helmet, helmet_conf = detect_helmet_in_head_region(image, person['bbox'])
-            if not has_helmet:
+            state, helmet_conf = detect_helmet_in_head_region(image, person['bbox'])
+            if state == HELMET_STATE_ABSENT:
                 violations.append({
                     'violation_type': 'NO_HELMET',
-                    'confidence': helmet_conf,
+                    'confidence': round(helmet_conf, 3),
+                    'helmet_state': state,
                     'person_bbox': person['bbox'],
                     'motorcycle_bbox': mc['bbox'],
                     'severity_score': config.RISK_SCORES.get('NO_HELMET', 30),

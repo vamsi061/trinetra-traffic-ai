@@ -5,6 +5,8 @@ import Upload from './pages/Upload'
 import Records from './pages/Records'
 import Analytics from './pages/Analytics'
 import Copilot from './pages/Copilot'
+import EnforcementDashboard from './pages/EnforcementDashboard'
+import TrafficIntelligenceCenter from './pages/TrafficIntelligenceCenter'
 
 export default function App() {
   return (
@@ -14,6 +16,8 @@ export default function App() {
         <Route path="/upload" element={<Upload />} />
         <Route path="/records" element={<Records />} />
         <Route path="/analytics" element={<Analytics />} />
+        <Route path="/enforcement" element={<EnforcementDashboard />} />
+        <Route path="/intel-center" element={<TrafficIntelligenceCenter />} />
         <Route path="/copilot" element={<Copilot />} />
       </Routes>
     </Layout>

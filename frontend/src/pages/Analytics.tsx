@@ -20,7 +20,8 @@ export default function Analytics() {
   const typeNameMap: Record<string, string> = {
     NO_HELMET: 'No Helmet',
     TRIPLE_RIDING: 'Triple Riding',
-    SEATBELT_VIOLATION: 'Seatbelt',
+    MOTORCYCLE_OVERLOADING: 'Overloading',
+    MOTORCYCLE_EXTREME_OVERLOADING: 'Extreme Overload',
     WRONG_SIDE_DRIVING: 'Wrong Side',
   }
   const typeData = (data?.by_type || []).map(d => ({ ...d, name: typeNameMap[d.type] || d.type.replace('_', ' ') }))
@@ -39,7 +40,7 @@ export default function Analytics() {
             { label: 'Total', value: stats.total },
             { label: 'No Helmet', value: stats.no_helmet },
             { label: 'Triple Riding', value: stats.triple_riding },
-            { label: 'Seatbelt', value: stats.seatbelt_offence },
+            { label: 'Overloading', value: (stats.motorcycle_overloading || 0) + (stats.motorcycle_extreme_overloading || 0) },
             { label: 'Wrong Side', value: stats.wrong_side },
           ].map(s => (
             <div key={s.label} className="glass rounded-xl p-5 border-l-4 border-l-red-500">

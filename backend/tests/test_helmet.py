@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from ai.helmet_detector import (
     detect_helmet_in_head_region, check_helmet_violation
 )
-from ai.rider_association import is_person_on_motorcycle
+from ai.rider_association import compute_rider_score
 
 
 def iou(box1, box2):
@@ -20,6 +20,11 @@ def iou(box1, box2):
     area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
     union = area1 + area2 - inter
     return inter / union if union > 0 else 0
+
+
+def is_on_motorcycle(person_bbox, motorcycle_bbox):
+    score, _ = compute_rider_score(person_bbox, motorcycle_bbox)
+    return score >= 0.15
 from ai.detector import ObjectDetector
 import config
 
@@ -46,39 +51,39 @@ class TestHelmetUtilities:
     def test_person_on_motorcycle_true(self):
         person = [100, 200, 140, 300]
         bike = [90, 180, 200, 320]
-        assert is_person_on_motorcycle(person, bike) == True
+        assert is_on_motorcycle(person, bike) == True
 
     def test_person_on_motorcycle_false(self):
-        person = [0, 0, 30, 60]
-        bike = [300, 300, 400, 400]
-        assert is_person_on_motorcycle(person, bike) == False
+        person = [300, 400, 330, 460]  # person below bike, not a rider
+        bike = [100, 100, 200, 200]
+        assert is_on_motorcycle(person, bike) == False
 
 
 class TestHelmetDetection:
     def test_detect_helmet_white(self):
         img = np.ones((100, 100, 3), dtype=np.uint8) * 255
         person_bbox = [0, 0, 100, 100]
-        has_helmet, _ = detect_helmet_in_head_region(img, person_bbox)
-        assert has_helmet == True
+        state, conf = detect_helmet_in_head_region(img, person_bbox)
+        assert state == 'HELMET_PRESENT'
 
     def test_detect_helmet_black(self):
         img = np.zeros((100, 100, 3), dtype=np.uint8)
         person_bbox = [0, 0, 100, 100]
-        has_helmet, _ = detect_helmet_in_head_region(img, person_bbox)
-        assert has_helmet == True
+        state, conf = detect_helmet_in_head_region(img, person_bbox)
+        assert state == 'HELMET_PRESENT'
 
     def test_detect_helmet_absent(self):
         img = np.ones((100, 100, 3), dtype=np.uint8) * 50
         img[:, :] = (80, 180, 80)  # green, not matching any helmet color range
         person_bbox = [0, 0, 100, 100]
-        has_helmet, _ = detect_helmet_in_head_region(img, person_bbox)
-        assert has_helmet == False
+        state, conf = detect_helmet_in_head_region(img, person_bbox)
+        assert state == 'NO_HELMET'
 
     def test_empty_head_region(self):
         img = np.ones((10, 10, 3), dtype=np.uint8)
         person_bbox = [0, 0, 5, 2]
-        has_helmet, _ = detect_helmet_in_head_region(img, person_bbox)
-        assert has_helmet == False
+        state, conf = detect_helmet_in_head_region(img, person_bbox)
+        assert state == 'HELMET_UNKNOWN'
 
     def test_check_no_violation_with_helmet(self):
         img = np.ones((200, 200, 3), dtype=np.uint8) * 255

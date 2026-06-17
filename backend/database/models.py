@@ -5,7 +5,7 @@ from datetime import datetime
 class ViolationRecord:
     def __init__(self, id=None, vehicle_number=None, vehicle_type=None,
                  violation_type=None, confidence=None, image_path=None,
-                 evidence_path=None, timestamp=None):
+                 evidence_path=None, location=None, timestamp=None):
         self.id = id
         self.vehicle_number = vehicle_number or ''
         self.vehicle_type = vehicle_type or ''
@@ -13,6 +13,7 @@ class ViolationRecord:
         self.confidence = confidence or 0.0
         self.image_path = image_path or ''
         self.evidence_path = evidence_path or ''
+        self.location = location or ''
         self.timestamp = timestamp or datetime.now().isoformat()
 
     def to_dict(self):
@@ -24,6 +25,7 @@ class ViolationRecord:
             'confidence': self.confidence,
             'image_path': self.image_path,
             'evidence_path': self.evidence_path,
+            'location': self.location,
             'timestamp': self.timestamp,
         }
 
@@ -37,5 +39,6 @@ class ViolationRecord:
             confidence=row[4],
             image_path=row[5],
             evidence_path=row[6],
-            timestamp=row[7],
+            location=row[7] if len(row) > 7 else '',
+            timestamp=row[8] if len(row) > 8 else row[7],
         )

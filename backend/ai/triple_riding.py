@@ -1,15 +1,27 @@
-from ai.rider_association import associate_riders, draw_debug_association
+from ai.rider_association import associate_riders, draw_debug_association, classify_occupancy
 import config
 
 
 def compute_association_confidence(riders):
-    """Combined confidence: geometric mean of rider confidences."""
+    """Combined confidence: mean of rider confidences weighted by assignment score."""
     if not riders:
         return 0.0
-    prod = 1.0
-    for r in riders:
-        prod *= r['confidence']
-    return prod ** (1.0 / len(riders))
+    return sum(r['confidence'] for r in riders) / len(riders)
+
+
+def compute_risk(base_score, confidence):
+    """Confidence-adjusted risk score."""
+    return round(base_score * min(confidence + 0.2, 1.0), 1)
+
+
+def get_violation_label(occ_label):
+    """Map occupancy label to violation type."""
+    mapping = {
+        'TRIPLE_RIDING': 'TRIPLE_RIDING',
+        'MOTORCYCLE_OVERLOADING': 'MOTORCYCLE_OVERLOADING',
+        'MOTORCYCLE_EXTREME_OVERLOADING': 'MOTORCYCLE_EXTREME_OVERLOADING',
+    }
+    return mapping.get(occ_label)
 
 
 def check_triple_riding(detections, image=None):
@@ -20,6 +32,7 @@ def check_triple_riding(detections, image=None):
     associations = associate_riders(persons, motorcycles, img_shape)
 
     violations = []
+    needs_review = False
 
     for assoc in associations:
         mc = assoc['motorcycle']
@@ -29,35 +42,35 @@ def check_triple_riding(detections, image=None):
         if rider_count == 0:
             continue
 
-        # Safety heuristic: if many persons nearby even with low confidence, flag it
-        total_nearby = rider_count
-        if total_nearby >= 3:
-            pass
+        conf = compute_association_confidence(riders)
+        occ = classify_occupancy(rider_count, conf)
+
+        if occ['needs_review']:
+            needs_review = True
 
         involved = [mc.get('instance_id', 'motorcycle')] + [r.get('instance_id', f'rider_{i}') for i, r in enumerate(riders)]
+        base_score = config.RISK_SCORES.get(get_violation_label(occ['label']), 0)
 
-        if rider_count >= config.OVERLOADING_THRESHOLD:
-            violations.append({
-                'violation_type': 'MOTORCYCLE_OVERLOADING',
-                'confidence': compute_association_confidence(riders),
-                'rider_count': rider_count,
-                'riders': riders,
-                'motorcycle_bbox': mc['bbox'],
-                'severity_score': config.RISK_SCORES.get('MOTORCYCLE_OVERLOADING', 95),
-                'description': f'{rider_count} riders on {mc.get("instance_id", "motorcycle")} — OVERLOADING (limit: {config.OVERLOADING_THRESHOLD - 1})',
-                'involved_objects': involved,
-            })
-        elif rider_count > 2:
-            violations.append({
-                'violation_type': 'TRIPLE_RIDING',
-                'confidence': compute_association_confidence(riders),
-                'rider_count': rider_count,
-                'riders': riders,
-                'motorcycle_bbox': mc['bbox'],
-                'severity_score': config.RISK_SCORES.get('TRIPLE_RIDING', 75),
-                'description': f'{rider_count} riders on {mc.get("instance_id", "motorcycle")} (exceeds limit of 2)',
-                'involved_objects': involved,
-            })
+        prefix = ''
+        if occ['confidence_band'] == 'low':
+            prefix = 'Possible '
+        elif occ['confidence_band'] == 'medium':
+            prefix = 'Likely '
+
+        violations.append({
+            'violation_type': occ['label'],
+            'confidence': round(conf, 3),
+            'confidence_band': occ['confidence_band'],
+            'rider_count': rider_count,
+            'confirmed_count': assoc.get('confirmed_count', rider_count),
+            'possible_count': assoc.get('possible_count', 0),
+            'riders': riders,
+            'motorcycle_bbox': mc['bbox'],
+            'severity_score': compute_risk(base_score, conf),
+            'description': f"{prefix}{occ['description']} on {mc.get('instance_id', 'motorcycle')}",
+            'involved_objects': involved,
+            'needs_review': occ['needs_review'],
+        })
 
     # Draw debug visualization
     if image is not None and (motorcycles or persons):

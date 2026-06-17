@@ -94,7 +94,8 @@ export default function Records() {
               <option value="">All Types</option>
               <option value="NO_HELMET">No Helmet</option>
               <option value="TRIPLE_RIDING">Triple Riding</option>
-              <option value="SEATBELT_VIOLATION">Seatbelt Violation</option>
+              <option value="MOTORCYCLE_OVERLOADING">Motorcycle Overloading</option>
+              <option value="MOTORCYCLE_EXTREME_OVERLOADING">Extreme Overloading</option>
               <option value="WRONG_SIDE_DRIVING">Wrong-Side Driving</option>
             </select>
           </div>
@@ -141,7 +142,8 @@ export default function Records() {
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                         r.violation_type === 'NO_HELMET' ? 'bg-red-500/10 text-red-400' :
                         r.violation_type === 'TRIPLE_RIDING' ? 'bg-amber-500/10 text-amber-400' :
-                        r.violation_type === 'SEATBELT_VIOLATION' ? 'bg-orange-500/10 text-orange-400' :
+                        r.violation_type === 'MOTORCYCLE_OVERLOADING' ? 'bg-rose-500/10 text-rose-300' :
+                        r.violation_type === 'MOTORCYCLE_EXTREME_OVERLOADING' ? 'bg-pink-500/10 text-pink-200' :
                         r.violation_type === 'WRONG_SIDE_DRIVING' ? 'bg-purple-500/10 text-purple-400' :
                         'bg-gray-500/10 text-gray-400'
                       }`}>

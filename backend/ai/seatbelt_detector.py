@@ -46,8 +46,8 @@ def detect_seatbelt_in_torso(image, person_bbox):
     if lines is None:
         return False
 
-    h, w = torso_region.shape[:2]
-    cx, cy = w // 2, h // 2
+    h_, w_ = torso_region.shape[:2]
+    cx, cy = w_ // 2, h_ // 2
     diagonal_count = 0
     for line in lines:
         x1_l, y1_l, x2_l, y2_l = line[0]
@@ -61,16 +61,21 @@ def detect_seatbelt_in_torso(image, person_bbox):
         line_cx = (x1_l + x2_l) / 2
         line_cy = (y1_l + y2_l) / 2
         dist = np.sqrt((line_cx - cx) ** 2 + (line_cy - cy) ** 2)
-        if dist < w * 0.4:
+        if dist < w_ * 0.4:
             diagonal_count += 1
 
-    # Require at least 2 diagonal lines to confirm seatbelt
     return diagonal_count >= 2
 
 
 def check_seatbelt_violation(detections, image):
+    """Seatbelt detection ONLY for car occupants — disabled for motorcycle scenes."""
     persons = [d for d in detections if d['class_id'] == config.PERSON_CLASS_ID]
     cars = [d for d in detections if d['class_id'] == config.CAR_CLASS_ID]
+
+    # Disable seatbelt detection if no cars are present (motorcycle-only scene)
+    if not cars:
+        return []
+
     violations = []
 
     for person in persons:
@@ -81,8 +86,10 @@ def check_seatbelt_violation(detections, image):
                     violations.append({
                         'violation_type': 'SEATBELT_VIOLATION',
                         'confidence': person['confidence'],
+                        'confidence_band': 'medium' if person['confidence'] >= 0.6 else 'low',
                         'person_bbox': person['bbox'],
                         'vehicle_bbox': car['bbox'],
+                        'severity_score': config.RISK_SCORES.get('SEATBELT_VIOLATION', 40),
                         'description': f'{person.get("instance_id", "Person")} without seatbelt in {car.get("instance_id", "car")}',
                         'involved_objects': [
                             person.get('instance_id', 'person'),

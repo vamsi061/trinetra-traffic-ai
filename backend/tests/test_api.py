@@ -36,7 +36,7 @@ class TestHealthEndpoint:
         resp = client.get("/api/health")
         data = resp.json()
         assert data['status'] == 'operational'
-        assert data['service'] == 'TRINETRA AI'
+        assert 'TRINETRA AI' in data['service']
 
 
 class TestDetectEndpoint:

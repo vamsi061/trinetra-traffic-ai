@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
-  Home, Upload, FileText, BarChart3, Bot, TrafficCone, Menu, X,
+  Home, Upload, FileText, BarChart3, Bot, TrafficCone, Menu, X, ShieldAlert, Radio,
 } from 'lucide-react'
 
 const navItems = [
@@ -9,6 +9,8 @@ const navItems = [
   { to: '/upload', label: 'Upload', icon: Upload },
   { to: '/records', label: 'Records', icon: FileText },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { to: '/enforcement', label: 'Enforcement', icon: ShieldAlert },
+  { to: '/intel-center', label: 'Intel Center', icon: Radio },
   { to: '/copilot', label: 'AI Copilot', icon: Bot },
 ]
 
@@ -53,7 +55,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             System Online
           </div>
-          <p className="text-xs text-trinetra-muted mt-1">v2.0.0</p>
+          <p className="text-xs text-trinetra-muted mt-1">v3.0.0</p>
         </div>
       </aside>
 
