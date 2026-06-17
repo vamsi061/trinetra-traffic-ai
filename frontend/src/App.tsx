@@ -8,6 +8,8 @@ import Copilot from './pages/Copilot'
 import EnforcementDashboard from './pages/EnforcementDashboard'
 import TrafficIntelligenceCenter from './pages/TrafficIntelligenceCenter'
 import Validation from './pages/Validation'
+import Architecture from './pages/Architecture'
+import Deployment from './pages/Deployment'
 
 export default function App() {
   return (
@@ -21,6 +23,8 @@ export default function App() {
         <Route path="/intel-center" element={<TrafficIntelligenceCenter />} />
         <Route path="/copilot" element={<Copilot />} />
         <Route path="/validation" element={<Validation />} />
+        <Route path="/architecture" element={<Architecture />} />
+        <Route path="/deployment" element={<Deployment />} />
       </Routes>
     </Layout>
   )

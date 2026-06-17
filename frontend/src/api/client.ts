@@ -61,6 +61,8 @@ export interface OperationalIntelligence {
 export interface DetectResponse {
   success: boolean
   detections: Detection[]
+  pedestrians: { count: number; detected: { instance_id: string; bbox: number[]; confidence: number }[] }
+  image_quality: { score: string; issues: string[]; brightness: number; sharpness: number; contrast: number; expected_accuracy_impact: string }
   violations: Violation[]
   motorcycle_riders: MotorcycleRider[]
   risk_score?: number
@@ -71,11 +73,13 @@ export interface DetectResponse {
   operational_intelligence?: OperationalIntelligence
   license_plate: LicensePlate | null
   evidence_path: string | null
+  evidence_report?: string | null
 }
 
 export interface LicensePlate {
   number: string
   confidence: number
+  visibility?: string
 }
 
 export interface ViolationRecord {
@@ -196,6 +200,10 @@ export async function getAnalytics(): Promise<AnalyticsData> {
 
 export function getEvidenceUrl(filename: string): string {
   return `/api/evidence/${filename}`
+}
+
+export function getEvidenceReportUrl(filename: string): string {
+  return `/api/evidence/report/${filename}`
 }
 
 // — Intelligence API —

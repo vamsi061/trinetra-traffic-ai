@@ -2,8 +2,8 @@ import os, uuid
 from datetime import datetime
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Body
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import cv2
@@ -13,6 +13,9 @@ from utils.image_processing import enhance_image
 from ai.locate_anything import LocateAnythingDetector
 from ai.helmet_detector import check_helmet_violation
 from ai.triple_riding import check_triple_riding
+from ai.quality_assessment import assess_quality
+from ai.parking_detector import check_illegal_parking
+from ai.evidence_package import generate_evidence_report
 
 from ai.rider_association import associate_riders, classify_occupancy
 from ai.ocr import LicensePlateReader
@@ -274,6 +277,38 @@ async def detect_violations(file: UploadFile = File(...)):
 
     evidence_path = generate_evidence(processed, detections, violations, (plate_text, plate_conf))
 
+    # Image Quality Assessment
+    quality = assess_quality(image)
+
+    # Illegal Parking Detection
+    parking_violations = check_illegal_parking(detections, image.shape)
+    for v in parking_violations:
+        v['confidence_band'] = v.get('confidence_band', 'medium')
+        v['occupancy_estimate'] = 'N/A'
+        v['human_review_status'] = 'manual_verification_required'
+        rec = ENFORCEMENT_RECS.get(v["violation_type"], {})
+        v['enforcement_recommendation'] = rec.get('action', 'Officer Review Recommended: Assess parking violation on-site.')
+        v['escalation'] = rec.get('escalation', '')
+        v['reliability_badge'] = _reliability_label(v['confidence_band'], crowded_scene)
+        v['helmet_compliance'] = None
+        v['confidence_label'] = _confidence_label(v.get('confidence_band', 'medium'))
+    violations.extend(parking_violations)
+
+    # Pedestrian stats
+    person_detections = [d for d in detections if d['label'] == 'person']
+    pedestrian_count = len(person_detections)
+
+    # Plate visibility score
+    plate_visibility = 'High'
+    if plate_text:
+        plate_visibility = 'High'
+        if quality.get('score') in ('Fair', 'Poor'):
+            plate_visibility = 'Medium' if quality['score'] == 'Fair' else 'Low'
+        if plate_conf < 0.6:
+            plate_visibility = 'Low'
+        elif plate_conf < 0.8:
+            plate_visibility = 'Medium' if plate_visibility == 'High' else 'Low'
+
     total_risk = min(sum(v.get('severity_score', config.RISK_SCORES.get(v["violation_type"], 0)) for v in violations), 100)
     risk_status = 'NONE'
     if total_risk > 0:
@@ -298,6 +333,13 @@ async def detect_violations(file: UploadFile = File(...)):
 
     ai_review_needed = any(v.get('needs_review', False) for v in violations) or any_needs_review or crowded_scene
 
+    # Generate evidence report
+    license_plate_dict = {"number": plate_text, "confidence": round(plate_conf, 3), "visibility": plate_visibility} if plate_text else None
+    evidence_report_path = generate_evidence_report(
+        filepath, detections, violations,
+        license_plate_dict, quality, total_risk, risk_status
+    )
+
     return {
         "success": True,
         "detections": [
@@ -306,6 +348,12 @@ async def detect_violations(file: UploadFile = File(...)):
              "bbox": [round(v, 1) for v in d["bbox"]]}
             for d in detections
         ],
+        "pedestrians": {
+            "count": pedestrian_count,
+            "detected": [{"instance_id": d["instance_id"], "bbox": [round(v, 1) for v in d["bbox"]],
+                          "confidence": round(d["confidence"], 3)} for d in person_detections],
+        },
+        "image_quality": quality,
         "motorcycle_riders": motorcycle_riders,
         "violations": [
             {
@@ -336,8 +384,9 @@ async def detect_violations(file: UploadFile = File(...)):
             "mode": "Traffic Enforcement Intelligence Center",
             "note": "All violations include confidence-based reporting, explainable AI reasoning, human review status, and enforcement recommendations."
         },
-        "license_plate": {"number": plate_text, "confidence": round(plate_conf, 3)} if plate_text else None,
+        "license_plate": {"number": plate_text, "confidence": round(plate_conf, 3), "visibility": plate_visibility} if plate_text else None,
         "evidence_path": os.path.basename(evidence_path) if evidence_path else None,
+        "evidence_report": os.path.basename(evidence_report_path) if evidence_report_path else None,
     }
 
 
@@ -388,6 +437,14 @@ def get_evidence(filename: str):
     if not os.path.exists(filepath):
         raise HTTPException(404, "Evidence not found")
     return FileResponse(filepath, media_type="image/jpeg")
+
+
+@app.get("/api/evidence/report/{filename}")
+def get_evidence_report(filename: str):
+    filepath = os.path.join(config.REPORT_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(404, "Report not found")
+    return HTMLResponse(content=open(filepath).read(), status_code=200)
 
 
 # ——————— Repeat Offender Intelligence ———————

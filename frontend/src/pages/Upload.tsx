@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload as UploadIcon, AlertTriangle, CheckCircle, Search, Users, Shield, FileText, Eye, ThumbsUp, Bug, ChevronDown, ChevronUp, BarChart3, Activity, Presentation } from 'lucide-react'
-import { uploadImage, getEvidenceUrl } from '../api/client'
+import { Upload as UploadIcon, AlertTriangle, CheckCircle, Search, Users, Shield, FileText, Eye, ThumbsUp, Bug, ChevronDown, ChevronUp, BarChart3, Activity, Presentation, Download } from 'lucide-react'
+import { uploadImage, getEvidenceUrl, getEvidenceReportUrl } from '../api/client'
 import type { DetectResponse, ReliabilityBadge } from '../api/client'
 
 function ConfidenceBadge({ band, label }: { band: string; label: string }) {
@@ -65,32 +65,44 @@ function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
   else if (avgConf < 0.8) { reliability = 'Medium'; reliabilityReason = 'Moderate detection confidence.' }
 
   const topRec = result.violations[0]?.enforcement_recommendation?.split('.')[0] || 'No action required'
+  const qualityScore = result.image_quality?.score || 'N/A'
+  const pedestrianCount = result.pedestrians?.count || 0
+  const qualityColor = qualityScore === 'Excellent' ? 'text-green-400' : qualityScore === 'Good' ? 'text-blue-400' : qualityScore === 'Fair' ? 'text-yellow-400' : 'text-red-400'
 
   return (
     <div className="glass rounded-xl p-5 border-l-4 border-l-blue-500">
       <h3 className="text-sm font-semibold text-blue-400 mb-4 flex items-center gap-2">
         <BarChart3 className="w-4 h-4" /> Traffic Intelligence Summary
       </h3>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-10 gap-3">
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
-          <div className="text-xs text-trinetra-muted mb-1">Motorcycles Detected</div>
+          <div className="text-xs text-trinetra-muted mb-1">Motorcycles</div>
           <div className="text-xl font-bold text-white">{result.detections.filter(d => d.label === 'motorcycle').length}</div>
         </div>
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
-          <div className="text-xs text-trinetra-muted mb-1">Estimated Occupants</div>
+          <div className="text-xs text-trinetra-muted mb-1">Pedestrians</div>
+          <div className="text-xl font-bold text-white">{pedestrianCount}</div>
+        </div>
+        <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+          <div className="text-xs text-trinetra-muted mb-1">Est. Occupants</div>
           <div className="text-xl font-bold text-white">{occRange}</div>
         </div>
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
-          <div className="text-xs text-trinetra-muted mb-1">Potential Violations</div>
+          <div className="text-xs text-trinetra-muted mb-1">Image Quality</div>
+          <div className={`text-sm font-bold ${qualityColor}`}>{qualityScore}</div>
+          <div className="text-[10px] text-trinetra-muted mt-0.5 truncate max-w-[80px]">{result.image_quality?.issues?.join(', ') || 'Clear'}</div>
+        </div>
+        <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+          <div className="text-xs text-trinetra-muted mb-1">Violations</div>
           <div className={`text-xl font-bold ${violations > 0 ? 'text-red-400' : 'text-green-400'}`}>{violations}</div>
         </div>
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
-          <div className="text-xs text-trinetra-muted mb-1">Helmet Non-Compliance</div>
+          <div className="text-xs text-trinetra-muted mb-1">Helmet</div>
           <div className={`text-xl font-bold ${helmetCount > 0 ? 'text-orange-400' : 'text-green-400'}`}>{helmetCount}</div>
         </div>
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
-          <div className="text-xs text-trinetra-muted mb-1">Risk Level</div>
-          <div className={`text-xl font-bold ${
+          <div className="text-xs text-trinetra-muted mb-1">Risk</div>
+          <div className={`text-sm font-bold ${
             result.risk_status === 'CRITICAL' ? 'text-red-300' :
             result.risk_status === 'HIGH' ? 'text-orange-300' :
             result.risk_status === 'MODERATE' ? 'text-yellow-300' :
@@ -98,7 +110,7 @@ function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
           }`}>{result.risk_status || 'NONE'}</div>
         </div>
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
-          <div className="text-xs text-trinetra-muted mb-1">Review Status</div>
+          <div className="text-xs text-trinetra-muted mb-1">Review</div>
           <div className={`text-sm font-bold ${needsReview ? 'text-yellow-400' : 'text-green-400'}`}>
             {needsReview ? 'Needs Review' : 'Auto-Confirmed'}
           </div>
@@ -113,7 +125,7 @@ function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
           <div className="text-[10px] text-trinetra-muted mt-0.5 truncate max-w-[80px]">{reliabilityReason}</div>
         </div>
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
-          <div className="text-xs text-trinetra-muted mb-1">Recommended Response</div>
+          <div className="text-xs text-trinetra-muted mb-1">Recommended</div>
           <div className="text-[10px] font-medium text-blue-300 leading-tight">{topRec}</div>
         </div>
       </div>
@@ -404,7 +416,56 @@ export default function Upload() {
                 </div>
                 <div>
                   <div className="text-2xl font-bold text-white tracking-wider">{result.license_plate.number}</div>
-                  <div className="text-sm text-trinetra-muted">Confidence: {(result.license_plate.confidence * 100).toFixed(0)}%</div>
+                  <div className="text-sm text-trinetra-muted">Confidence: {(result.license_plate.confidence * 100).toFixed(0)}% | Visibility: {result.license_plate.visibility || 'N/A'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {result.evidence_report && (
+            <div className="glass rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <Download className="w-4 h-4" /> Evidence Report
+              </h3>
+              <p className="text-sm text-trinetra-muted mb-3">Download the full evidence package for officer review.</p>
+              <a
+                href={getEvidenceReportUrl(result.evidence_report)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/20 transition-colors text-sm"
+              >
+                <FileText className="w-4 h-4" />
+                Open Evidence Report (HTML)
+              </a>
+            </div>
+          )}
+
+          {/* Image Quality Assessment */}
+          {result.image_quality && (
+            <div className="glass rounded-xl p-6">
+              <h3 className="text-sm font-semibold text-trinetra-text mb-3 flex items-center gap-2">
+                <Activity className="w-4 h-4" /> Image Quality Assessment
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+                  <div className="text-xs text-trinetra-muted mb-1">Quality</div>
+                  <div className={`text-sm font-bold ${
+                    result.image_quality.score === 'Excellent' ? 'text-green-400' :
+                    result.image_quality.score === 'Good' ? 'text-blue-400' :
+                    result.image_quality.score === 'Fair' ? 'text-yellow-400' : 'text-red-400'
+                  }`}>{result.image_quality.score}</div>
+                </div>
+                <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+                  <div className="text-xs text-trinetra-muted mb-1">Issues</div>
+                  <div className="text-sm text-white">{result.image_quality.issues?.join(', ') || 'None'}</div>
+                </div>
+                <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+                  <div className="text-xs text-trinetra-muted mb-1">Expected Impact</div>
+                  <div className="text-sm text-white">{result.image_quality.expected_accuracy_impact}</div>
+                </div>
+                <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+                  <div className="text-xs text-trinetra-muted mb-1">Sharpness</div>
+                  <div className="text-sm text-white">{result.image_quality.sharpness?.toFixed(0)}</div>
                 </div>
               </div>
             </div>
