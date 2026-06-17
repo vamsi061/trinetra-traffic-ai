@@ -51,6 +51,7 @@ export interface Violation {
   involved_objects: string[]
   severity_score?: number
   needs_review?: boolean
+  officer_priority?: string
 }
 
 export interface OperationalIntelligence {
@@ -273,6 +274,29 @@ export interface ExecutiveSummary {
 
 export async function getExecutiveSummary(): Promise<ExecutiveSummary> {
   const { data } = await api.get('/intelligence/executive-summary')
+  return data
+}
+
+// — Vehicle Risk Profile —
+export interface VehicleRiskProfile {
+  vehicle_number: string
+  total_violations: number
+  helmet_violations: number
+  overloading_violations: number
+  risk_score: number
+  risk_level: string
+  watchlist: boolean
+  officer_attention: string
+  last_seen: string | null
+}
+
+export async function getVehicleRisk(vehicleNumber: string): Promise<VehicleRiskProfile> {
+  const { data } = await api.get(`/intelligence/vehicle-risk/${encodeURIComponent(vehicleNumber)}`)
+  return data
+}
+
+export async function getWatchlist(): Promise<{ watchlist: VehicleRiskProfile[]; total: number }> {
+  const { data } = await api.get('/intelligence/watchlist')
   return data
 }
 

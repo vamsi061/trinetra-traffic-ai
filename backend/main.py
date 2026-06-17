@@ -25,6 +25,7 @@ from ai.hotspot_analytics import get_hotspot_analysis, register_hotspot_violatio
 from ai.forecast_engine import get_predictions, get_tomorrow_forecast, generate_forecast
 from ai.report_generator import generate_report, list_reports
 from ai.risk_scoring import compute_enhanced_risk, get_risk_status
+from ai.vehicle_risk import compute_vehicle_risk_profile
 from database.db import (
     init_db, insert_violation, get_all_violations,
     get_statistics, get_violations_by_type, get_violations_by_day,
@@ -229,13 +230,23 @@ async def detect_violations(file: UploadFile = File(...)):
             is_single_mc = len([d for d in detections if d['label'] == 'motorcycle']) == 1
             v['occupancy_estimate'] = _occupancy_estimate(v.get('rider_count', 0), v.get('confidence', 0), single_motorcycle=is_single_mc)
             v['human_review_status'] = _review_status(v)
-            rec = ENFORCEMENT_RECS.get(v["violation_type"], {})
-            v['enforcement_recommendation'] = rec.get('action', 'Standard enforcement procedure.')
-            v['escalation'] = rec.get('escalation', '')
-            v['reliability_badge'] = _reliability_label(v['confidence_band'], crowded_scene)
-            hc = _helmet_compliance(v)
-            v['helmet_compliance'] = hc
-            violations.append(v)
+    rec = ENFORCEMENT_RECS.get(v["violation_type"], {})
+    v['enforcement_recommendation'] = rec.get('action', 'Standard enforcement procedure.')
+    v['escalation'] = rec.get('escalation', '')
+    v['reliability_badge'] = _reliability_label(v['confidence_band'], crowded_scene)
+    hc = _helmet_compliance(v)
+    v['helmet_compliance'] = hc
+    # Officer Priority
+    sev = v.get('severity_score', config.RISK_SCORES.get(v["violation_type"], 0))
+    if sev >= 95:
+        v['officer_priority'] = 'URGENT REVIEW'
+    elif sev >= 75:
+        v['officer_priority'] = 'HIGH PRIORITY'
+    elif sev >= 30:
+        v['officer_priority'] = 'MEDIUM PRIORITY'
+    else:
+        v['officer_priority'] = 'LOW PRIORITY'
+    violations.append(v)
 
     # License Plate OCR
     plate_text, plate_conf = "", 0.0
@@ -292,6 +303,7 @@ async def detect_violations(file: UploadFile = File(...)):
         v['reliability_badge'] = _reliability_label(v['confidence_band'], crowded_scene)
         v['helmet_compliance'] = None
         v['confidence_label'] = _confidence_label(v.get('confidence_band', 'medium'))
+        v['officer_priority'] = 'MEDIUM PRIORITY'
     violations.extend(parking_violations)
 
     # Pedestrian stats
@@ -372,6 +384,7 @@ async def detect_violations(file: UploadFile = File(...)):
                 "involved_objects": v.get("involved_objects", []),
                 "severity_score": v.get("severity_score", config.RISK_SCORES.get(v["violation_type"], 0)),
                 "needs_review": v.get("needs_review", False),
+                "officer_priority": v.get("officer_priority", "MEDIUM PRIORITY"),
             }
             for v in violations
         ],
@@ -444,7 +457,35 @@ def get_evidence_report(filename: str):
     filepath = os.path.join(config.REPORT_DIR, filename)
     if not os.path.exists(filepath):
         raise HTTPException(404, "Report not found")
-    return HTMLResponse(content=open(filepath).read(), status_code=200)
+    media = "application/pdf" if filename.endswith('.pdf') else "text/html"
+    return FileResponse(filepath, media_type=media)
+
+
+# ——————— Vehicle Risk Profile ———————
+
+@app.get("/api/intelligence/vehicle-risk/{vehicle_number}")
+def vehicle_risk_profile(vehicle_number: str):
+    from database.db import get_all_violations
+    all_v = get_all_violations(vehicle_number=vehicle_number)
+    profile = compute_vehicle_risk_profile(vehicle_number, all_v)
+    return profile
+
+
+# ——————— Vehicle Watchlist ———————
+
+@app.get("/api/intelligence/watchlist")
+def vehicle_watchlist():
+    from database.db import get_all_violations
+    all_v = get_all_violations()
+    vehicles = set(v.vehicle_number for v in (all_v or []) if v.vehicle_number)
+    watchlist = []
+    for vnum in vehicles:
+        vlist = [v for v in (all_v or []) if v.vehicle_number == vnum]
+        profile = compute_vehicle_risk_profile(vnum, vlist)
+        if profile['watchlist']:
+            watchlist.append(profile)
+    watchlist.sort(key=lambda x: x['risk_score'], reverse=True)
+    return {"watchlist": watchlist, "total": len(watchlist)}
 
 
 # ——————— Repeat Offender Intelligence ———————

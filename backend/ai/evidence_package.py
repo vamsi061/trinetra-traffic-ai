@@ -1,98 +1,138 @@
 import os
 import uuid
 from datetime import datetime
+from fpdf import FPDF
 import config
 
 
 def generate_evidence_report(image_path, detections, violations, license_plate, quality, risk_score, risk_status):
-    """Generate an HTML evidence report for officer review.
-
-    Returns:
-        path to generated report file
-    """
+    """Generate a PDF evidence package for officer review."""
     os.makedirs(config.REPORT_DIR, exist_ok=True)
     report_id = uuid.uuid4().hex[:12]
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    image_name = os.path.basename(image_path)
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font('Helvetica', 'B', 18)
+    pdf.set_text_color(192, 57, 43)
+    pdf.cell(0, 12, 'TRINETRA AI - Evidence Report', new_x="LMARGIN", new_y="NEXT", align='C')
+    pdf.set_font('Helvetica', '', 9)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 6, f'Generated: {timestamp}  |  Report ID: {report_id}', new_x="LMARGIN", new_y="NEXT", align='C')
+    pdf.ln(5)
+
+    # Case Information
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_text_color(44, 62, 80)
+    pdf.cell(0, 8, 'Case Information', new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font('Helvetica', '', 10)
+    pdf.set_text_color(0, 0, 0)
+
     plate_text = license_plate.get('number', 'Not detected') if license_plate else 'Not detected'
     plate_conf = f"{license_plate.get('confidence', 0) * 100:.0f}%" if license_plate else 'N/A'
+    plate_vis = license_plate.get('visibility', 'N/A') if license_plate else 'N/A'
 
-    violations_html = ''
-    for v in violations:
-        violations_html += f"""
-        <tr>
-            <td style="padding:8px;border-bottom:1px solid #eee;text-transform:capitalize;">{v.get('type', v.get('violation_type', 'Unknown')).replace('_', ' ')}</td>
-            <td style="padding:8px;border-bottom:1px solid #eee;">{v.get('confidence_label', 'N/A')}</td>
-            <td style="padding:8px;border-bottom:1px solid #eee;">{v.get('reliability_badge', {}).get('label', 'N/A')}</td>
-            <td style="padding:8px;border-bottom:1px solid #eee;">{v.get('human_review_status', 'N/A').replace('_', ' ')}</td>
-            <td style="padding:8px;border-bottom:1px solid #eee;">{v.get('enforcement_recommendation', 'N/A')[:60]}</td>
-        </tr>"""
+    info_lines = [
+        f'Source Image: {os.path.basename(image_path)}',
+        f'License Plate: {plate_text}',
+        f'OCR Confidence: {plate_conf}',
+        f'Plate Visibility: {plate_vis}',
+        f'Overall Risk Score: {risk_score}',
+        f'Risk Level: {risk_status}',
+    ]
+    for line in info_lines:
+        pdf.cell(0, 6, line, new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
 
-    html = f"""<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><title>TRINETRA Evidence Report</title>
-<style>
-body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; color: #333; }}
-h1 {{ color: #c0392b; font-size: 24px; border-bottom: 2px solid #c0392b; padding-bottom: 10px; }}
-h2 {{ color: #2c3e50; font-size: 18px; margin-top: 25px; }}
-table {{ width: 100%; border-collapse: collapse; margin: 10px 0; }}
-th {{ background: #f5f5f5; padding: 8px; text-align: left; border-bottom: 2px solid #ddd; }}
-td {{ padding: 8px; border-bottom: 1px solid #eee; }}
-.label {{ color: #666; font-size: 12px; }}
-.value {{ font-weight: bold; }}
-.footer {{ margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #999; }}
-</style>
-</head>
-<body>
-<h1>TRINETRA AI — Evidence Report</h1>
-<p style="color:#666;">Generated: {timestamp} | Report ID: {report_id}</p>
+    # Image Quality
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_text_color(44, 62, 80)
+    pdf.cell(0, 8, 'Image Quality Assessment', new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font('Helvetica', '', 10)
+    pdf.set_text_color(0, 0, 0)
+    q_lines = [
+        f'Quality Score: {quality.get("score", "N/A")}',
+        f'Detected Issues: {", ".join(quality.get("issues", [])) or "None"}',
+        f'Expected Accuracy Impact: {quality.get("expected_accuracy_impact", "N/A")}',
+    ]
+    for line in q_lines:
+        pdf.cell(0, 6, line, new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
 
-<h2>Case Information</h2>
-<table>
-    <tr><td class="label">Source Image</td><td class="value">{image_name}</td></tr>
-    <tr><td class="label">License Plate</td><td class="value">{plate_text}</td></tr>
-    <tr><td class="label">OCR Confidence</td><td class="value">{plate_conf}</td></tr>
-    <tr><td class="label">Risk Score</td><td class="value">{risk_score}</td></tr>
-    <tr><td class="label">Risk Level</td><td class="value">{risk_status}</td></tr>
-</table>
+    # Detected Objects
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_text_color(44, 62, 80)
+    pdf.cell(0, 8, 'Detected Objects', new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font('Helvetica', '', 10)
+    pdf.set_text_color(0, 0, 0)
 
-<h2>Image Quality Assessment</h2>
-<table>
-    <tr><td class="label">Quality Score</td><td class="value">{quality.get('score', 'N/A')}</td></tr>
-    <tr><td class="label">Detected Issues</td><td class="value">{', '.join(quality.get('issues', [])) or 'None'}</td></tr>
-    <tr><td class="label">Expected Accuracy Impact</td><td class="value">{quality.get('expected_accuracy_impact', 'N/A')}</td></tr>
-</table>
+    mc_count = sum(1 for d in detections if d.get('label') == 'motorcycle')
+    car_count = sum(1 for d in detections if d.get('label') == 'car')
+    person_count = sum(1 for d in detections if d.get('label') == 'person')
+    bus_count = sum(1 for d in detections if d.get('label') == 'bus')
+    truck_count = sum(1 for d in detections if d.get('label') == 'truck')
 
-<h2>Detected Objects</h2>
-<table>
-    <tr><th>Object</th><th>Count</th></tr>
-    <tr><td>Motorcycles</td><td>{sum(1 for d in detections if d.get('label') == 'motorcycle')}</td></tr>
-    <tr><td>Cars</td><td>{sum(1 for d in detections if d.get('label') == 'car')}</td></tr>
-    <tr><td>Persons</td><td>{sum(1 for d in detections if d.get('label') == 'person')}</td></tr>
-    <tr><td>Buses</td><td>{sum(1 for d in detections if d.get('label') == 'bus')}</td></tr>
-    <tr><td>Trucks</td><td>{sum(1 for d in detections if d.get('label') == 'truck')}</td></tr>
-</table>
+    # Table header
+    pdf.set_font('Helvetica', 'B', 10)
+    pdf.set_fill_color(245, 245, 245)
+    pdf.cell(60, 7, 'Object Type', border=1, fill=True)
+    pdf.cell(30, 7, 'Count', border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
 
-<h2>Detected Violations</h2>
-<table>
-    <tr><th>Type</th><th>Confidence</th><th>Reliability</th><th>Review Status</th><th>Recommendation</th></tr>
-    {violations_html if violations_html else '<tr><td colspan="5" style="text-align:center;padding:10px;color:#999;">No violations detected</td></tr>'}
-</table>
+    pdf.set_font('Helvetica', '', 10)
+    for label, count in [('Motorcycles', mc_count), ('Cars', car_count), ('Persons', person_count),
+                          ('Buses', bus_count), ('Trucks', truck_count)]:
+        pdf.cell(60, 6, label, border=1)
+        pdf.cell(30, 6, str(count), border=1, new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
 
-<h2>Officer Notes</h2>
-<p style="border:1px solid #ddd;padding:15px;min-height:60px;border-radius:4px;color:#999;">
-<em>Add notes here for review...</em></p>
+    # Violations
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_text_color(44, 62, 80)
+    pdf.cell(0, 8, 'Detected Violations', new_x="LMARGIN", new_y="NEXT")
 
-<div class="footer">
-    <p>TRINETRA AI — AI-Powered Traffic Enforcement Intelligence Platform</p>
-    <p>This report is for officer review purposes only. Enforcement decisions require human verification.</p>
-</div>
-</body>
-</html>"""
+    if not violations:
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 6, 'No violations detected.', new_x="LMARGIN", new_y="NEXT")
+    else:
+        # Table header
+        pdf.set_font('Helvetica', 'B', 8)
+        pdf.set_fill_color(245, 245, 245)
+        col_w = [40, 28, 22, 28, 22, 30]
+        headers = ['Type', 'Confidence', 'Reliability', 'Review', 'Priority', 'Recommendation']
+        for i, h in enumerate(headers):
+            pdf.cell(col_w[i], 7, h, border=1, fill=True)
+        pdf.ln()
 
-    report_path = os.path.join(config.REPORT_DIR, f"evidence_{report_id}.html")
-    with open(report_path, 'w') as f:
-        f.write(html)
+        pdf.set_font('Helvetica', '', 7)
+        for v in violations:
+            vtype = v.get('type', v.get('violation_type', 'Unknown')).replace('_', ' ').capitalize()
+            conf = v.get('confidence_label', 'N/A')
+            rel = v.get('reliability_badge', {}).get('label', 'N/A')
+            review = v.get('human_review_status', 'N/A').replace('_', ' ')
+            pri = v.get('officer_priority', 'MEDIUM')
+            rec = v.get('enforcement_recommendation', 'N/A')[:45]
+            vals = [vtype, conf, rel, review, pri, rec]
+            for i, val in enumerate(vals):
+                pdf.cell(col_w[i], 6, val, border=1)
+            pdf.ln()
 
+    pdf.ln(5)
+
+    # Officer Notes section
+    pdf.set_font('Helvetica', 'B', 12)
+    pdf.set_text_color(44, 62, 80)
+    pdf.cell(0, 8, 'Officer Notes', new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font('Helvetica', '', 10)
+    pdf.set_text_color(200, 200, 200)
+    pdf.cell(0, 6, '(Add notes for review)', new_x="LMARGIN", new_y="NEXT")
+
+    pdf.ln(10)
+    pdf.set_font('Helvetica', 'I', 8)
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(0, 5, 'TRINETRA AI - AI-Powered Traffic Enforcement Intelligence Platform', new_x="LMARGIN", new_y="NEXT", align='C')
+    pdf.cell(0, 5, 'This report is for officer review. Enforcement decisions require human verification.', new_x="LMARGIN", new_y="NEXT", align='C')
+
+    report_path = os.path.join(config.REPORT_DIR, f"evidence_{report_id}.pdf")
+    pdf.output(report_path)
     return report_path

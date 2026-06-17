@@ -35,6 +35,20 @@ function ReviewBadge({ status }: { status: string }) {
   return <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${c.className}`}>{c.icon} {c.label}</span>
 }
 
+function PriorityBadge({ priority }: { priority: string }) {
+  const colors: Record<string, string> = {
+    'URGENT REVIEW': 'bg-red-500/20 text-red-300 border-red-500/30',
+    'HIGH PRIORITY': 'bg-orange-500/20 text-orange-300 border-orange-500/30',
+    'MEDIUM PRIORITY': 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
+    'LOW PRIORITY': 'bg-green-500/20 text-green-300 border-green-500/30',
+  }
+  return (
+    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${colors[priority] || colors['MEDIUM PRIORITY']}`}>
+      {priority}
+    </span>
+  )
+}
+
 function occupantRange(riders: { rider_count: number }[]): string {
   const total = riders?.reduce((s, mr) => s + mr.rider_count, 0) || 0
   if (total <= 0) return '0'
@@ -262,10 +276,19 @@ export default function Upload() {
           {judgeMode && (
             <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 text-center">
               <Presentation className="w-6 h-6 text-purple-400 mx-auto mb-2" />
-              <h2 className="text-lg font-bold text-white">Judge Demo Mode</h2>
-              <p className="text-sm text-trinetra-muted mt-1">
-                Presentation view — technical identifiers hidden. All detections shown with business-value summaries.
-              </p>
+              <h2 className="text-lg font-bold text-white">TRINETRA AI</h2>
+              <p className="text-sm text-purple-300 mt-1">AI-Powered Traffic Enforcement Intelligence Platform</p>
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-3 text-xs text-trinetra-muted">
+                <span>✓ Violation Detection</span>
+                <span>✓ Explainable AI</span>
+                <span>✓ Confidence Scoring</span>
+                <span>✓ Human Review</span>
+                <span>✓ Evidence Generation</span>
+                <span>✓ Repeat Offender Intelligence</span>
+                <span>✓ Hotspot Analytics</span>
+                <span>✓ Officer Prioritization</span>
+                <span>✓ Smart City Readiness</span>
+              </div>
             </div>
           )}
 
@@ -347,6 +370,7 @@ export default function Upload() {
                              v.type.replace(/_/g, ' ')}
                           </span>
                           <ConfidenceBadge band={v.confidence_band} label={v.confidence_label} />
+                          <PriorityBadge priority={v.officer_priority || 'MEDIUM PRIORITY'} />
                           {v.severity_score && v.severity_score > 0 && !judgeMode && (
                             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                               v.severity_score >= 95 ? 'bg-red-500/20 text-red-300' :
@@ -435,7 +459,7 @@ export default function Upload() {
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/20 transition-colors text-sm"
               >
                 <FileText className="w-4 h-4" />
-                Open Evidence Report (HTML)
+                Download Evidence Report (PDF)
               </a>
             </div>
           )}

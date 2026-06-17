@@ -10,6 +10,7 @@ import TrafficIntelligenceCenter from './pages/TrafficIntelligenceCenter'
 import Validation from './pages/Validation'
 import Architecture from './pages/Architecture'
 import Deployment from './pages/Deployment'
+import Impact from './pages/Impact'
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/validation" element={<Validation />} />
         <Route path="/architecture" element={<Architecture />} />
         <Route path="/deployment" element={<Deployment />} />
+        <Route path="/impact" element={<Impact />} />
       </Routes>
     </Layout>
   )

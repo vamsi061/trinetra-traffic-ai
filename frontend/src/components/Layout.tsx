@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
-  Home, Upload, FileText, BarChart3, Bot, TrafficCone, Menu, X, ShieldAlert, Radio, CheckSquare, Cpu, Server,
+  Home, Upload, FileText, BarChart3, Bot, TrafficCone, Menu, X, ShieldAlert, Radio, CheckSquare, Cpu, Server, TrendingUp,
 } from 'lucide-react'
 
 const navItems = [
@@ -15,6 +15,7 @@ const navItems = [
   { to: '/copilot', label: 'AI Copilot', icon: Bot },
   { to: '/architecture', label: 'Architecture', icon: Cpu },
   { to: '/deployment', label: 'Deployment', icon: Server },
+  { to: '/impact', label: 'Impact', icon: TrendingUp },
 ]
 
 export default function Layout({ children }: { children: React.ReactNode }) {
