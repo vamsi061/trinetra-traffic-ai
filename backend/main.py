@@ -99,15 +99,29 @@ ENFORCEMENT_RECS = {
 
 # ————— Occupancy Estimate —————
 def _occupancy_estimate(rider_count, conf):
+    if conf >= 0.80:
+        if rider_count <= 0:
+            return 'No occupants detected'
+        if rider_count <= 2:
+            return f'{rider_count} occupant{"s" if rider_count != 1 else ""}'
+        if rider_count == 3:
+            return '3 occupants'
+        if rider_count <= 5:
+            return '4-5 occupants'
+        if rider_count <= 8:
+            return '6-8 occupants'
+        return '10-12 occupants'
+    if rider_count <= 0:
+        return 'Occupants uncertain'
     if rider_count <= 2:
-        return f'{rider_count} occupant{"s" if rider_count != 1 else ""}'
-    if rider_count == 3:
-        return '3 occupants'
-    if rider_count == 4:
+        return '1-2 occupants'
+    if rider_count <= 3:
+        return '2-3 occupants'
+    if rider_count <= 5:
         return '4-5 occupants'
-    if rider_count >= 5:
-        return '5+ occupants'
-    return f'{rider_count} occupants'
+    if rider_count <= 8:
+        return '6-8 occupants'
+    return '10-12 occupants'
 
 # ————— Explainable Reason —————
 def _build_explainable_reason(violation_type, details):

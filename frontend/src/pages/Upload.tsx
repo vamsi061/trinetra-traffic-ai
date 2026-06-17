@@ -35,11 +35,21 @@ function ReviewBadge({ status }: { status: string }) {
   return <span className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${c.className}`}>{c.icon} {c.label}</span>
 }
 
+function occupantRange(riders: { rider_count: number }[]): string {
+  const total = riders?.reduce((s, mr) => s + mr.rider_count, 0) || 0
+  if (total <= 0) return '0'
+  if (total <= 2) return `${total}`
+  if (total <= 3) return '3'
+  if (total <= 5) return '4-5'
+  if (total <= 8) return '6-8'
+  return '10-12'
+}
+
 function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
   const vehiclesDetected = result.detections.filter(d =>
     ['motorcycle', 'car', 'bus', 'truck'].includes(d.label)
   ).length
-  const totalOccupants = result.motorcycle_riders?.reduce((s, mr) => s + mr.rider_count, 0) || 0
+  const occRange = occupantRange(result.motorcycle_riders || [])
   const violations = result.violations.length
   const needsReview = result.violations.some(v => v.human_review_status !== 'auto_confirmed')
 
@@ -67,7 +77,7 @@ function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
         </div>
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
           <div className="text-xs text-trinetra-muted mb-1">Estimated Occupants</div>
-          <div className="text-xl font-bold text-white">{totalOccupants}</div>
+          <div className="text-xl font-bold text-white">{occRange}</div>
         </div>
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
           <div className="text-xs text-trinetra-muted mb-1">Potential Violations</div>
@@ -151,8 +161,10 @@ export default function Upload() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Traffic Image Analysis</h1>
-          <p className="text-trinetra-muted text-sm">Upload for AI-powered enforcement intelligence</p>
+          <div>
+            <h1 className="text-2xl font-bold text-white">TRINETRA AI</h1>
+            <p className="text-trinetra-muted text-sm">AI-Powered Traffic Enforcement Intelligence Platform</p>
+          </div>
         </div>
         {result && !loading && (
           <button
@@ -226,7 +238,18 @@ export default function Upload() {
       )}
 
       {result && !loading && (
-        <div className="space-y-6 mt-8">
+        <div className={`space-y-6 mt-8 ${judgeMode ? 'p-4 rounded-2xl border-2 border-purple-500/30 bg-purple-500/[0.02]' : ''}`}>
+          {/* Judge Mode banner */}
+          {judgeMode && (
+            <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 text-center">
+              <Presentation className="w-6 h-6 text-purple-400 mx-auto mb-2" />
+              <h2 className="text-lg font-bold text-white">Judge Demo Mode</h2>
+              <p className="text-sm text-trinetra-muted mt-1">
+                Presentation view — technical identifiers hidden. All detections shown with business-value summaries.
+              </p>
+            </div>
+          )}
+
           {/* Executive Summary — always shown */}
           <ExecutiveSummaryCard result={result} />
 
@@ -265,7 +288,7 @@ export default function Upload() {
           <div className="glass rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white">Violation Report</h3>
-              {result.risk_score !== undefined && result.risk_score > 0 && (
+              {result.risk_score !== undefined && result.risk_score > 0 && !judgeMode && (
                 <span className={`text-sm font-semibold px-3 py-1 rounded-full ${
                   result.risk_status === 'CRITICAL' ? 'bg-red-500/20 text-red-300' :
                   result.risk_status === 'HIGH' ? 'bg-orange-500/20 text-orange-300' :
@@ -305,7 +328,7 @@ export default function Upload() {
                              v.type.replace(/_/g, ' ')}
                           </span>
                           <ConfidenceBadge band={v.confidence_band} label={v.confidence_label} />
-                          {v.severity_score && v.severity_score > 0 && (
+                          {v.severity_score && v.severity_score > 0 && !judgeMode && (
                             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                               v.severity_score >= 95 ? 'bg-red-500/20 text-red-300' :
                               v.severity_score >= 75 ? 'bg-orange-500/20 text-orange-300' :
@@ -314,7 +337,7 @@ export default function Upload() {
                           )}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <ReviewBadge status={v.human_review_status} />
+                          {!judgeMode && <ReviewBadge status={v.human_review_status} />}
                           {v.reliability_badge && <ReliabilityBadge badge={v.reliability_badge} />}
                         </div>
                       </div>
@@ -379,6 +402,23 @@ export default function Upload() {
               </div>
             </div>
           )}
+
+          {/* AI Safety & Review — Human-in-the-Loop Panel */}
+          <div className="glass rounded-xl p-6 border-l-4 border-l-emerald-500">
+            <h3 className="text-sm font-semibold text-emerald-400 mb-3 flex items-center gap-2">
+              <Shield className="w-4 h-4" /> AI Safety &amp; Review — Human-in-the-Loop
+            </h3>
+            <div className="space-y-2 text-sm text-trinetra-text">
+              <p>TRINETRA AI prioritizes <strong className="text-white">explainability</strong> and <strong className="text-white">human oversight</strong> in all enforcement recommendations.</p>
+              <ul className="list-disc list-inside space-y-1 text-trinetra-muted">
+                <li>All detections include <strong className="text-white">confidence scoring</strong> — low-confidence results are flagged for review.</li>
+                <li>Scenes flagged as <strong className="text-white">crowded</strong> or <strong className="text-white">ambiguous</strong> require manual verification.</li>
+                <li>Enforcement decisions are <strong className="text-white">not automated</strong> — all recommendations require officer review.</li>
+                <li>The system is designed as a <strong className="text-white">decision support tool</strong>, not an enforcement authority.</li>
+              </ul>
+              <p className="text-trinetra-muted text-xs mt-2">This demonstrates responsible AI usage in traffic enforcement intelligence.</p>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -35,8 +35,7 @@ export default function Home() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-white">TRINETRA AI</h1>
-            <p className="text-trinetra-muted text-lg">Traffic Enforcement Intelligence</p>
-            <p className="text-trinetra-muted text-sm mt-1">AI-Powered Decision Support for Traffic Police</p>
+            <p className="text-trinetra-muted text-lg">AI-Powered Traffic Enforcement Intelligence Platform</p>
           </div>
         </div>
       </div>
@@ -44,10 +43,9 @@ export default function Home() {
       {/* Mission Statement */}
       <div className="glass rounded-xl p-6 border-l-4 border-l-red-500">
         <p className="text-trinetra-text text-sm leading-relaxed">
-          <strong className="text-white">TRINETRA AI</strong> is an operational intelligence platform for traffic police.
-          It provides <strong className="text-white">explainable AI detection</strong>, <strong className="text-white">risk assessment</strong>,
-          <strong className="text-white"> repeat offender tracking</strong>, <strong className="text-white">hotspot analysis</strong>, and
-          <strong className="text-white"> actionable enforcement recommendations</strong> — all designed for real-world deployment.
+          <strong className="text-white">TRINETRA AI</strong> is an AI-powered traffic enforcement intelligence platform.
+          Core workflow: Traffic Image → Violation Detection → Risk Assessment → Explainable Analysis →
+          Human Review → Recommended Response → Traffic Intelligence Dashboard.
         </p>
       </div>
 
