@@ -100,6 +100,36 @@ export default function Upload() {
     setLoading(true)
     try {
       const res = await uploadImage(file)
+      // Debug logging for dashboard data flow
+      const motorcycles = res.detections.filter(d => d.label === 'motorcycle')
+      const persons = res.detections.filter(d => d.label === 'person')
+      const totalOccupants = res.motorcycle_riders?.reduce((s, mr) => s + mr.rider_count, 0) || 0
+      console.log('=== TRINETRA DASHBOARD DEBUG ===')
+      console.log('detected_motorcycles:', motorcycles.length)
+      console.log('detected_persons:', persons.length)
+      console.log('estimated_occupants:', totalOccupants)
+      console.log('detected_violations:', res.violations.length)
+      console.log('risk_score:', res.risk_score)
+      console.log('risk_status:', res.risk_status)
+      console.log('crowded_scene:', res.crowded_scene)
+      console.log('ai_review_recommended:', res.ai_review_recommended)
+      if (res.violations.length > 0) {
+        console.log('violation_details:', res.violations.map(v => ({
+          type: v.type,
+          confidence: v.confidence,
+          band: v.confidence_band,
+          label: v.confidence_label,
+          review: v.human_review_status,
+          reliability: v.reliability_badge?.label,
+        })))
+      }
+      if (res.motorcycle_riders && res.motorcycle_riders.length > 0) {
+        console.log('rider_details:', res.motorcycle_riders.map(mr => ({
+          count: mr.rider_count,
+          estimate: mr.occupancy_estimate,
+        })))
+      }
+      console.log('================================')
       setResult(res)
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Analysis failed. Check backend connection.')
