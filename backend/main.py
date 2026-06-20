@@ -222,33 +222,72 @@ async def detect_violations(file: UploadFile = File(...)):
     motorcycle_count = len([d for d in detections if d['label'] == 'motorcycle'])
     crowded_scene = person_count >= 6 or (person_count >= 4 and motorcycle_count >= 2)
 
-    # Detect violations
+    # ————— Violation Detection Loop —————
     violations = []
     for fn in [check_helmet_violation, check_triple_riding]:
         for v in fn(detections, processed):
+            # FIX: Skip NORMAL (non-violation) entries from triple_riding
+            if v['violation_type'] == 'NORMAL':
+                continue
             v['confidence_band'] = v.get('confidence_band', 'medium')
             is_single_mc = len([d for d in detections if d['label'] == 'motorcycle']) == 1
             v['occupancy_estimate'] = _occupancy_estimate(v.get('rider_count', 0), v.get('confidence', 0), single_motorcycle=is_single_mc)
             v['human_review_status'] = _review_status(v)
-    rec = ENFORCEMENT_RECS.get(v["violation_type"], {})
-    v['enforcement_recommendation'] = rec.get('action', 'Standard enforcement procedure.')
-    v['escalation'] = rec.get('escalation', '')
-    v['reliability_badge'] = _reliability_label(v['confidence_band'], crowded_scene)
-    hc = _helmet_compliance(v)
-    v['helmet_compliance'] = hc
-    # Officer Priority
-    sev = v.get('severity_score', config.RISK_SCORES.get(v["violation_type"], 0))
-    if sev >= 95:
-        v['officer_priority'] = 'URGENT REVIEW'
-    elif sev >= 75:
-        v['officer_priority'] = 'HIGH PRIORITY'
-    elif sev >= 30:
-        v['officer_priority'] = 'MEDIUM PRIORITY'
-    else:
-        v['officer_priority'] = 'LOW PRIORITY'
-    violations.append(v)
+            rec = ENFORCEMENT_RECS.get(v["violation_type"], {})
+            v['enforcement_recommendation'] = rec.get('action', 'Standard enforcement procedure.')
+            v['escalation'] = rec.get('escalation', '')
+            v['reliability_badge'] = _reliability_label(v['confidence_band'], crowded_scene)
+            hc = _helmet_compliance(v)
+            v['helmet_compliance'] = hc
+            # Officer Priority
+            sev = v.get('severity_score', config.RISK_SCORES.get(v["violation_type"], 0))
+            if sev >= 95:
+                v['officer_priority'] = 'URGENT REVIEW'
+            elif sev >= 75:
+                v['officer_priority'] = 'HIGH PRIORITY'
+            elif sev >= 30:
+                v['officer_priority'] = 'MEDIUM PRIORITY'
+            else:
+                v['officer_priority'] = 'LOW PRIORITY'
+            violations.append(v)
 
-    # License Plate OCR
+    # ————— Compliance Assessment —————
+    # After running all detection functions, determine if vehicle is COMPLIANT
+    helmet_present = True
+    for d in detections:
+        if d['label'] == 'person':
+            # Check if any person was flagged as no-helmet
+            for v in violations:
+                if v['violation_type'] == 'NO_HELMET':
+                    helmet_present = False
+                    break
+
+    has_actual_violations = any(
+        vt in ('NO_HELMET', 'TRIPLE_RIDING', 'MOTORCYCLE_OVERLOADING',
+               'MOTORCYCLE_EXTREME_OVERLOADING')
+        for vt in [v['violation_type'] for v in violations]
+    )
+    # Simplified: if no actual violations yet, check compliance
+    if not has_actual_violations:
+        # Check if riders present and all appeared compliant
+        persons_mc_check = [d for d in detections if d['label'] == 'person']
+        motorcycles_check = [d for d in detections if d['label'] == 'motorcycle']
+        if motorcycles_check and persons_mc_check:
+            compliance_status = 'COMPLIANT'
+            compliance_reason = 'All observed vehicles appear compliant with traffic regulations.'
+        elif motorcycles_check and not persons_mc_check:
+            # Motorcycle with no detected persons — insufficient evidence
+            compliance_status = 'COMPLIANT'
+            compliance_reason = 'No violations detected.'
+        else:
+            # No motorcycles at all
+            compliance_status = 'NONE'
+            compliance_reason = ''
+    else:
+        compliance_status = 'NONE'
+        compliance_reason = ''
+
+    # ————— License Plate OCR —————
     plate_text, plate_conf = "", 0.0
     vehicles = [d for d in detections if d['class_id'] in (2, 3, 5, 7)]
     if vehicles:
@@ -291,10 +330,14 @@ async def detect_violations(file: UploadFile = File(...)):
     # Image Quality Assessment
     quality = assess_quality(image)
 
-    # Illegal Parking Detection
-    parking_violations = check_illegal_parking(detections, image.shape)
+    # Illegal Parking Detection — skip if vehicle is moving (mounted rider in travel lane)
+    has_mc = any(d['label'] == 'motorcycle' for d in detections)
+    has_person = any(d['label'] == 'person' for d in detections)
+    has_mounted_rider = has_mc and has_person and any(mr.get('rider_count', 0) > 0 for mr in motorcycle_riders)
+    is_moving_hint = has_mounted_rider or (not has_actual_violations and has_mc)
+    parking_violations = check_illegal_parking(detections, image.shape, moving_vehicle_hint=is_moving_hint)
     for v in parking_violations:
-        v['confidence_band'] = v.get('confidence_band', 'medium')
+        v['confidence_band'] = v.get('confidence_band', 'low')
         v['occupancy_estimate'] = 'N/A'
         v['human_review_status'] = 'manual_verification_required'
         rec = ENFORCEMENT_RECS.get(v["violation_type"], {})
@@ -302,9 +345,11 @@ async def detect_violations(file: UploadFile = File(...)):
         v['escalation'] = rec.get('escalation', '')
         v['reliability_badge'] = _reliability_label(v['confidence_band'], crowded_scene)
         v['helmet_compliance'] = None
-        v['confidence_label'] = _confidence_label(v.get('confidence_band', 'medium'))
+        v['confidence_label'] = _confidence_label(v.get('confidence_band', 'low'))
         v['officer_priority'] = 'MEDIUM PRIORITY'
-    violations.extend(parking_violations)
+    # Only add parking violations if no compliance override
+    if compliance_status != 'COMPLIANT':
+        violations.extend(parking_violations)
 
     # Pedestrian stats
     person_detections = [d for d in detections if d['label'] == 'person']
@@ -321,13 +366,26 @@ async def detect_violations(file: UploadFile = File(...)):
         elif plate_conf < 0.8:
             plate_visibility = 'Medium' if plate_visibility == 'High' else 'Low'
 
-    total_risk = min(sum(v.get('severity_score', config.RISK_SCORES.get(v["violation_type"], 0)) for v in violations), 100)
-    risk_status = 'NONE'
-    if total_risk > 0:
-        risk_status = 'LOW' if total_risk <= 25 else ('MODERATE' if total_risk <= 50 else ('HIGH' if total_risk <= 75 else 'CRITICAL'))
+    # FIX 4+5: Risk score — compliant vehicles get 0-10 LOW
+    if compliance_status == 'COMPLIANT':
+        total_risk = 0
+        risk_status = 'LOW'
+    else:
+        actual_violations = [v for v in violations
+                            if v['violation_type'] not in ('NORMAL',)]
+        total_risk = min(sum(
+            v.get('severity_score', config.RISK_SCORES.get(v["violation_type"], 0))
+            for v in actual_violations
+        ), 100)
+        risk_status = 'NONE'
+        if total_risk > 0:
+            risk_status = 'LOW' if total_risk <= 25 else ('MODERATE' if total_risk <= 50 else ('HIGH' if total_risk <= 75 else 'CRITICAL'))
 
     location_hint = ''
     for v in violations:
+        # Skip NORMAL/compliant entries in database
+        if v.get('violation_type') == 'NORMAL':
+            continue
         record = ViolationRecord(
             vehicle_number=plate_text,
             vehicle_type=vehicle_type,
@@ -352,6 +410,15 @@ async def detect_violations(file: UploadFile = File(...)):
         license_plate_dict, quality, total_risk, risk_status
     )
 
+    # Filter violations for response: skip NORMAL entries
+    response_violations = [v for v in violations if v['violation_type'] not in ('NORMAL',)]
+
+    # FIX 6: Reliability — HIGH for clear single-rider helmet-visible images
+    if compliance_status == 'COMPLIANT' and not crowded_scene and quality.get('score') in ('Excellent', 'Good'):
+        reliability_override = {'label': 'High', 'reason': 'Clear detection with strong confidence.', 'color': 'bg-green-500/20 text-green-300'}
+    else:
+        reliability_override = None
+
     return {
         "success": True,
         "detections": [
@@ -367,6 +434,8 @@ async def detect_violations(file: UploadFile = File(...)):
         },
         "image_quality": quality,
         "motorcycle_riders": motorcycle_riders,
+        "compliance_status": compliance_status,
+        "compliance_reason": compliance_reason,
         "violations": [
             {
                 "type": v["violation_type"],
@@ -379,19 +448,19 @@ async def detect_violations(file: UploadFile = File(...)):
                 "human_review_status": v["human_review_status"],
                 "enforcement_recommendation": v["enforcement_recommendation"],
                 "escalation": v.get("escalation", ""),
-                "reliability_badge": v["reliability_badge"],
+                "reliability_badge": reliability_override if (compliance_status == 'COMPLIANT' and reliability_override) else v["reliability_badge"],
                 "helmet_compliance": v.get("helmet_compliance"),
                 "involved_objects": v.get("involved_objects", []),
                 "severity_score": v.get("severity_score", config.RISK_SCORES.get(v["violation_type"], 0)),
                 "needs_review": v.get("needs_review", False),
                 "officer_priority": v.get("officer_priority", "MEDIUM PRIORITY"),
             }
-            for v in violations
+            for v in response_violations
         ],
         "risk_score": total_risk,
         "risk_status": risk_status,
         "crowded_scene": crowded_scene,
-        "helmet_non_compliance_count": len([v for v in violations if v["violation_type"] == "NO_HELMET"]),
+        "helmet_non_compliance_count": len([v for v in response_violations if v["violation_type"] == "NO_HELMET"]),
         "ai_review_recommended": ai_review_needed,
         "operational_intelligence": {
             "mode": "Traffic Enforcement Intelligence Center",

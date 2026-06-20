@@ -69,6 +69,8 @@ export interface DetectResponse {
   risk_score?: number
   risk_status?: string
   crowded_scene?: boolean
+  compliance_status?: string
+  compliance_reason?: string
   helmet_non_compliance_count?: number
   ai_review_recommended?: boolean
   operational_intelligence?: OperationalIntelligence

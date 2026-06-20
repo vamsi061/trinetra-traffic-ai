@@ -67,26 +67,32 @@ function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
   const violations = result.violations.length
   const needsReview = result.violations.some(v => v.human_review_status !== 'auto_confirmed')
   const helmetCount = result.violations.filter(v => v.type === 'NO_HELMET').length
+  const compliant = result.compliance_status === 'COMPLIANT'
 
   // Compute reliability from results
   const avgConf = result.violations.length > 0
     ? result.violations.reduce((s, v) => s + v.confidence, 0) / result.violations.length
     : (result.detections.length > 0 ? result.detections.reduce((s, d) => s + d.confidence, 0) / result.detections.length : 0)
   const crowded = result.crowded_scene
+  const qualityGood = result.image_quality?.score === 'Excellent' || result.image_quality?.score === 'Good'
   let reliability = 'High', reliabilityReason = 'Clear detection with strong confidence.'
   if (crowded) { reliability = 'Limited'; reliabilityReason = 'Crowded scene with overlapping occupants.' }
   else if (avgConf < 0.6) { reliability = 'Low'; reliabilityReason = 'Low detection confidence. Verification recommended.' }
-  else if (avgConf < 0.8) { reliability = 'Medium'; reliabilityReason = 'Moderate detection confidence.' }
+  else if (avgConf < 0.8 && !compliant && !qualityGood) { reliability = 'Medium'; reliabilityReason = 'Moderate detection confidence.' }
+  else if (compliant && qualityGood) { reliability = 'High'; reliabilityReason = 'Compliant vehicle with clear image quality.' }
 
-  const topRec = result.violations[0]?.enforcement_recommendation?.split('.')[0] || 'No action required'
+  const topRec = result.violations[0]?.enforcement_recommendation?.split('.')[0] || (compliant ? 'No action required' : 'No action required')
   const qualityScore = result.image_quality?.score || 'N/A'
   const pedestrianCount = result.pedestrians?.count || 0
   const qualityColor = qualityScore === 'Excellent' ? 'text-green-400' : qualityScore === 'Good' ? 'text-blue-400' : qualityScore === 'Fair' ? 'text-yellow-400' : 'text-red-400'
 
   return (
-    <div className="glass rounded-xl p-5 border-l-4 border-l-blue-500">
-      <h3 className="text-sm font-semibold text-blue-400 mb-4 flex items-center gap-2">
+    <div className={`glass rounded-xl p-5 border-l-4 ${compliant ? 'border-l-emerald-500' : 'border-l-blue-500'}`}>
+      <h3 className={`text-sm font-semibold ${compliant ? 'text-emerald-400' : 'text-blue-400'} mb-4 flex items-center gap-2`}>
         <BarChart3 className="w-4 h-4" /> Traffic Intelligence Summary
+        {compliant && (
+          <span className="ml-2 text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full">COMPLIANT VEHICLE</span>
+        )}
       </h3>
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-10 gap-3">
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
@@ -125,8 +131,8 @@ function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
         </div>
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
           <div className="text-xs text-trinetra-muted mb-1">Review</div>
-          <div className={`text-sm font-bold ${needsReview ? 'text-yellow-400' : 'text-green-400'}`}>
-            {needsReview ? 'Needs Review' : 'Auto-Confirmed'}
+          <div className={`text-sm font-bold ${compliant ? 'text-emerald-400' : needsReview ? 'text-yellow-400' : 'text-green-400'}`}>
+            {compliant ? 'Auto-Confirmed' : needsReview ? 'Needs Review' : 'Auto-Confirmed'}
           </div>
         </div>
         <div className="bg-[#1a2040] rounded-lg p-3 text-center">
@@ -424,9 +430,39 @@ export default function Upload() {
                 ))}
               </div>
             ) : (
-              <div className="flex items-center gap-3 text-green-400">
-                <CheckCircle className="w-5 h-5" />
-                <span>No violations detected</span>
+              <div className={`rounded-lg border ${result.compliance_status === 'COMPLIANT' ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-trinetra-border'}`}>
+                <div className="p-6 text-center">
+                  {result.compliance_status === 'COMPLIANT' ? (
+                    <>
+                      <div className="w-14 h-14 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-3">
+                        <ThumbsUp className="w-7 h-7 text-emerald-400" />
+                      </div>
+                      <h3 className="text-lg font-bold text-emerald-400 mb-1">COMPLIANT VEHICLE</h3>
+                      <p className="text-sm text-trinetra-muted mb-4">{result.compliance_reason || 'All observed vehicles appear compliant with traffic regulations.'}</p>
+                      <span className="inline-flex items-center gap-1.5 text-xs bg-emerald-500/20 text-emerald-300 px-3 py-1.5 rounded-full">
+                        <CheckCircle className="w-3.5 h-3.5" /> No Action Required
+                      </span>
+                      {/* Judge Mode: show compliance business value */}
+                      {judgeMode && (
+                        <div className="mt-4 p-4 rounded-lg bg-purple-500/5 border border-purple-500/20 text-left">
+                          <div className="flex items-center gap-1.5 text-xs text-purple-400 mb-2">
+                            <Presentation className="w-3 h-3" /> Business Value
+                          </div>
+                          <p className="text-sm text-trinetra-text">
+                            TRINETRA AI correctly identified a <strong className="text-white">compliant vehicle</strong> —
+                            demonstrating the platform's ability to recognize both violations <strong className="text-white">and safe road behavior</strong>.
+                            This reduces false positives and builds <strong className="text-white">trust in AI-assisted traffic enforcement</strong>.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-center gap-3 text-green-400">
+                      <CheckCircle className="w-5 h-5" />
+                      <span>No violations detected</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
