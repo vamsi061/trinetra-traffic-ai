@@ -291,8 +291,10 @@ def check_helmet_violation(detections, image):
         mc = assoc['motorcycle']
         for person in assoc['riders']:
             person_bbox = person['bbox']
+            person_id = person.get('instance_id', 'unknown')
 
             # Step 1: Try YOLO model association
+            model_checked_no_match = False
             if model_available and helmet_detections:
                 is_associated, model_state, model_conf = _associate_helmet_to_rider(
                     helmet_detections, person_bbox
@@ -308,9 +310,22 @@ def check_helmet_violation(detections, image):
                         ))
                     # If PRESENT, no violation needed
                     continue
+                else:
+                    model_checked_no_match = True
 
             # Step 2: No model association — try HSV fallback
             hsv_state, hsv_conf = _hsv_helmet_detect(image, person_bbox)
+
+            # When the YOLO model was available but found no matching detection
+            # for THIS rider, downgrade HSV HELMET_PRESENT to HELMET_UNKNOWN.
+            # The model couldn't see a head, so we can't trust HSV's "helmet present."
+            if model_available and model_checked_no_match and hsv_state == HELMET_STATE_PRESENT:
+                hsv_state = HELMET_STATE_UNKNOWN
+                hsv_conf = min(hsv_conf, 0.45)
+            elif model_available and not helmet_detections and hsv_state == HELMET_STATE_PRESENT:
+                hsv_state = HELMET_STATE_UNKNOWN
+                hsv_conf = min(hsv_conf, 0.45)
+
             if model_available:
                 # Model is available but didn't match — rider head region unclear
                 # Still use HSV as secondary check but mark as lower confidence
@@ -320,7 +335,7 @@ def check_helmet_violation(detections, image):
                         severity = max(15, severity - 10)
                     violations.append(_make_violation(
                         person, mc, max(0.5, hsv_conf), hsv_state, severity,
-                        'Helmet model: no detection. HSV analysis suggests possible non-compliance.'
+                        'Helmet model: no matching detection. HSV analysis suggests possible non-compliance.'
                     ))
             else:
                 # Model unavailable — use HSV as primary

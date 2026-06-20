@@ -245,7 +245,7 @@ async def detect_violations(file: UploadFile = File(...)):
     # ————— Violation Detection Loop —————
     violations = []
     for fn in [check_helmet_violation, check_triple_riding]:
-        for v in fn(detections, processed):
+        for v in fn(detections, processed if fn is check_triple_riding else image):
             # FIX: Skip NORMAL (non-violation) entries from triple_riding
             if v['violation_type'] == 'NORMAL':
                 continue

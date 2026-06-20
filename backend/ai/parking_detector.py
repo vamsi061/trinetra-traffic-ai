@@ -18,14 +18,15 @@ def _has_parking_context(detections, image_shape):
     h, w = image_shape[:2]
     clues = []
 
-    # Check for curb-like horizontal lines in lower image region
-    # (simplified: large horizontal structures near bottom)
     vehicles = [d for d in detections if d['class_id'] in (2, 3, 5, 7)]
+    persons = [d for d in detections if d['class_id'] == 0]
+
     for veh in vehicles:
         x1, y1, x2, y2 = veh['bbox']
         box_h = y2 - y1
         box_w = x2 - x1
-        veh_center_y = (y1 + y2) / 2
+        veh_cy = (y1 + y2) / 2
+        cx = (x1 + x2) / 2
 
         # Vehicle occupies lower quarter of image with wide aspect → likely parked near curb
         if y1 > h * 0.75 and box_w > w * 0.3 and box_h < h * 0.25:
@@ -35,13 +36,19 @@ def _has_parking_context(detections, image_shape):
         if y2 >= h * 0.95 and box_h < h * 0.3:
             clues.append('footpath_proximity')
 
-    # Look for pedestrian walk area indicators: persons on footpath-like area
-    persons = [d for d in detections if d['class_id'] == 0]
-    for p in persons:
-        _, y1, _, y2 = p['bbox']
-        # Person in lower region with full body visible → pedestrian area
-        if y1 > h * 0.6 and (y2 - y1) > h * 0.15:
-            clues.append('pedestrian_area')
+        # Vehicle in lower half with nearby pedestrians → possible roadside parking
+        if veh_cy > h * 0.5:
+            nearby_pedestrians = sum(
+                1 for p in persons
+                if abs((p['bbox'][1] + p['bbox'][3]) / 2 - veh_cy) < h * 0.25
+            )
+            if nearby_pedestrians >= 4:
+                clues.append('roadside_parking_with_pedestrians')
+
+        # Vehicle at extreme edge of frame → parked at roadside
+        edge_margin = w * 0.05
+        if (cx < edge_margin or cx > w - edge_margin) and box_h < h * 0.35:
+            clues.append('edge_parked_vehicle')
 
     return len(clues) > 0, clues
 
@@ -129,6 +136,7 @@ def check_illegal_parking(detections, image_shape, moving_vehicle_hint=False):
         return violations
 
     vehicles = [d for d in detections if d['class_id'] in (2, 3, 5, 7)]
+    persons = [d for d in detections if d['class_id'] == 0]
     if not vehicles:
         return violations
 
@@ -146,8 +154,13 @@ def check_illegal_parking(detections, image_shape, moving_vehicle_hint=False):
         box_w = x2 - x1
         box_h = y2 - y1
 
-        # Skip if vehicle is in active travel lane (likely moving)
-        if _is_in_travel_lane(veh, image_shape):
+        # Skip if vehicle is in active travel lane (likely moving) UNLESS
+        # there are pedestrians nearby suggesting roadside parking
+        has_nearby_pedestrians = sum(
+            1 for p in persons
+            if abs((p['bbox'][1] + p['bbox'][3]) / 2 - cy) < h * 0.12
+        ) >= 2
+        if _is_in_travel_lane(veh, image_shape) and not has_nearby_pedestrians:
             continue
 
         reasons = []
@@ -157,14 +170,23 @@ def check_illegal_parking(detections, image_shape, moving_vehicle_hint=False):
         if y1 > footpath_zone_y and box_w > w * 0.35 and box_h > h * 0.15:
             reasons.append('vehicle positioned across pedestrian pathway')
 
-        # Blocking lane: vehicle extends across lane markings (heuristic: wide box centered)
+        # Blocking lane: vehicle extends across lane markings
         if box_w > w * 0.5 and box_h > h * 0.2:
             reasons.append('vehicle extends across lane width')
 
-        # Stationary on curb-side: vehicle hugging edge with wide aspect
+        # Stationary on curb-side: vehicle hugging edge
         edge_margin = w * 0.05
         if (cx < edge_margin or cx > w - edge_margin) and box_h < h * 0.3:
             reasons.append('vehicle stationary at roadside edge')
+
+        # Parked with nearby pedestrians in lower portion of image
+        if has_nearby_pedestrians and cy > h * 0.5:
+            nearby_count = sum(
+                1 for p in persons
+                if abs((p['bbox'][1] + p['bbox'][3]) / 2 - cy) < h * 0.12
+            )
+            if nearby_count >= 4:
+                reasons.append('vehicle stationary with pedestrian activity at roadside')
 
         if reasons:
             violations.append({
