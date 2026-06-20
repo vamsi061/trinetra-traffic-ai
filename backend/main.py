@@ -150,18 +150,30 @@ def _build_explainable_reason(violation_type, details):
     occ_est = _occupancy_estimate(details.get('rider_count', 0), details.get('confidence', 0))
     hc = details.get('helmet_compliance')
     helmet_desc = hc['status'] if hc else ''
-    reasons = {
-        'NO_HELMET': f"{prefix} — {helmet_desc}. Rider detected without visible protective headgear.",
-        'TRIPLE_RIDING': f"{prefix} — Triple Riding. {occ_est} associated with a single motorcycle.",
-        'MOTORCYCLE_OVERLOADING': f"{prefix} — Motorcycle Overloading. {occ_est} detected — exceeds legal occupant limit.",
-        'MOTORCYCLE_EXTREME_OVERLOADING': f"{prefix} — Extreme Overloading. {occ_est} — Vehicle inspection recommended.",
+    helmet_state = details.get('helmet_state', '')
+    confidence_pct = f"{details.get('confidence', 0) * 100:.0f}%"
+    review_map = {
+        'auto_confirmed': 'Automatically confirmed — no further review required.',
+        'human_review_recommended': 'Human review recommended before enforcement action.',
+        'manual_verification_required': 'Manual verification required — insufficient confidence for automated decision.',
     }
-    reason = reasons.get(violation_type, f'{prefix} — traffic violation detected.')
-    status = _review_status(details)
-    if status == 'manual_verification_required':
-        reason += ' Manual verification required before enforcement action.'
-    elif status == 'human_review_recommended':
-        reason += ' Human review recommended before enforcement action.'
+    review_note = review_map.get(details.get('human_review_status', ''), '')
+
+    if violation_type == 'NO_HELMET':
+        if helmet_state == 'HELMET_UNKNOWN':
+            reason = f"{prefix} — {helmet_desc}. Head region partially visible but no clear helmet features detected. Confidence: {confidence_pct}. {review_note}"
+        else:
+            reason = f"{prefix} — {helmet_desc}. Rider head region clearly visible and no protective headgear detected. Evidence: direct visual observation of head region. Confidence: {confidence_pct}. {review_note}"
+    elif violation_type == 'TRIPLE_RIDING':
+        reason = f"{prefix} — Triple riding detected. {occ_est} associated with a single motorcycle. Evidence: multiple persons aligned with motorcycle seating positions. Confidence: {confidence_pct}. {review_note}"
+    elif violation_type == 'MOTORCYCLE_OVERLOADING':
+        reason = f"{prefix} — Motorcycle overloading. {occ_est} exceeds legal occupant limit. Evidence: multiple distinct riders associated with motorcycle. Confidence: {confidence_pct}. {review_note}"
+    elif violation_type == 'MOTORCYCLE_EXTREME_OVERLOADING':
+        reason = f"{prefix} — Extreme overloading. {occ_est} — public safety concern. Evidence: excessive number of persons on single motorcycle. Confidence: {confidence_pct}. {review_note}"
+    elif violation_type == 'POSSIBLE_ILLEGAL_PARKING':
+        reason = f"{prefix} — Possible illegal parking detected. Vehicle positioned in restricted zone. Evidence: spatial analysis of vehicle position relative to roadway features. {review_note}"
+    else:
+        reason = f"{prefix} — traffic violation detected. Confidence: {confidence_pct}. {review_note}"
     return reason
 
 
@@ -258,36 +270,24 @@ async def detect_violations(file: UploadFile = File(...)):
                 v['officer_priority'] = 'LOW PRIORITY'
             violations.append(v)
 
-    # ————— Compliance Assessment —————
-    # After running all detection functions, determine if vehicle is COMPLIANT
-    helmet_present = True
-    for d in detections:
-        if d['label'] == 'person':
-            # Check if any person was flagged as no-helmet
-            for v in violations:
-                if v['violation_type'] == 'NO_HELMET':
-                    helmet_present = False
-                    break
-
+    # ————— Compliance Assessment (FINAL decision) —————
+    # A vehicle can only be COMPLIANT if no violations are detected.
+    ALL_VIOLATION_TYPES = (
+        'NO_HELMET', 'TRIPLE_RIDING', 'MOTORCYCLE_OVERLOADING',
+        'MOTORCYCLE_EXTREME_OVERLOADING', 'POSSIBLE_ILLEGAL_PARKING',
+    )
     has_actual_violations = any(
-        vt in ('NO_HELMET', 'TRIPLE_RIDING', 'MOTORCYCLE_OVERLOADING',
-               'MOTORCYCLE_EXTREME_OVERLOADING')
+        vt in ALL_VIOLATION_TYPES
         for vt in [v['violation_type'] for v in violations]
     )
-    # Simplified: if no actual violations yet, check compliance
     if not has_actual_violations:
-        # Check if riders present and all appeared compliant
-        persons_mc_check = [d for d in detections if d['label'] == 'person']
-        motorcycles_check = [d for d in detections if d['label'] == 'motorcycle']
-        if motorcycles_check and persons_mc_check:
+        motorcycles_check = any(d['label'] == 'motorcycle' for d in detections)
+        persons_check = any(d['label'] == 'person' for d in detections)
+        if motorcycles_check and persons_check:
             compliance_status = 'COMPLIANT'
             compliance_reason = 'All observed vehicles appear compliant with traffic regulations.'
-        elif motorcycles_check and not persons_mc_check:
-            # Motorcycle with no detected persons — insufficient evidence
-            compliance_status = 'COMPLIANT'
-            compliance_reason = 'No violations detected.'
         else:
-            # No motorcycles at all
+            # No motorcycle, or motorcycle without visible rider — insufficient data
             compliance_status = 'NONE'
             compliance_reason = ''
     else:

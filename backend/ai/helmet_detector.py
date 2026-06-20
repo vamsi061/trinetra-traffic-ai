@@ -22,8 +22,8 @@ def detect_helmet_in_head_region(image, person_bbox):
     if person_h < 20 or person_w < 10:
         return HELMET_STATE_UNKNOWN, 0.0
 
-    # Head region: upper 25% of person bbox
-    head_y2 = y1 + int(person_h * 0.25)
+    # Head region: upper 30% of person bbox (riders on motorcycles have different proportions)
+    head_y2 = y1 + int(person_h * 0.30)
     head_region = image[y1:head_y2, x1:x2]
 
     if head_region.size == 0:
