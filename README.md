@@ -1,3 +1,12 @@
+---
+title: TRINETRA AI
+emoji: 🚦
+colorFrom: red
+colorTo: blue
+sdk: docker
+app_port: 7860
+---
+
 # TRINETRA AI — Traffic Violation Detection Platform
 
 AI-powered traffic enforcement intelligence platform for smart cities. Detects violations from uploaded images, generates evidence reports, and provides predictive enforcement analytics.
@@ -46,6 +55,21 @@ bash start.sh --dev
 ```bash
 bash start.sh --install
 ```
+
+## Deploy to Hugging Face Spaces (Free)
+
+1. Go to https://huggingface.co/new-space
+2. Set **Space Name** to `trinetra-traffic-ai`
+3. Select **Docker** as the SDK
+4. Choose **CPU basic** (free) as the hardware
+5. Click **Create Space**
+6. Push code to the Space:
+   ```bash
+   git remote add hf https://huggingface.co/spaces/YOUR_USERNAME/trinetra-traffic-ai
+   git push hf main
+   ```
+
+The Space builds and deploys automatically. Visit `https://YOUR_USERNAME-trinetra-traffic-ai.hf.space` to use the app.
 
 ## Project Structure
 

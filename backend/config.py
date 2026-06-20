@@ -1,7 +1,7 @@
 import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, 'data')
+DATA_DIR = os.environ.get('DATA_DIR', os.path.join(BASE_DIR, 'data'))
 UPLOAD_DIR = os.path.join(DATA_DIR, 'uploads')
 EVIDENCE_DIR = os.path.join(DATA_DIR, 'evidence')
 DB_PATH = os.path.join(DATA_DIR, 'database.db')

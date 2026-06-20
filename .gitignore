@@ -8,9 +8,12 @@ venv/
 .env
 data/uploads/*
 data/evidence/*
+data/reports/*
 data/database.db
+data/debug_*
 !data/uploads/.gitkeep
 !data/evidence/.gitkeep
 .DS_Store
 backend/__pycache__/
 *.log
+frontend/tsconfig.tsbuildinfo
