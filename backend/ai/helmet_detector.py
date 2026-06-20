@@ -69,10 +69,14 @@ def detect_helmet_in_head_region(image, person_bbox):
             max_ratio = ratio
 
     # Decision with uncertainty
-    if max_ratio > 0.35:
+    # Key insight: dark hair easily matches the 'black' helmet HSV range.
+    # Only return HELMET_PRESENT when strong evidence (>0.30 ratio).
+    # 0.15-0.30 is HELMET_UNKNOWN (possible hair/skin, not helmet).
+    # Below 0.15 is HELMET_ABSENT (clearly no helmet).
+    if max_ratio > 0.30:
         return HELMET_STATE_PRESENT, min(max_ratio * 1.2, 1.0)
-    elif max_ratio > 0.15:
-        return HELMET_STATE_PRESENT, max_ratio
+    elif max_ratio > 0.10:
+        return HELMET_STATE_UNKNOWN, max(0.5, max_ratio)
     else:
         return HELMET_STATE_ABSENT, max_ratio
 
@@ -89,14 +93,22 @@ def check_helmet_violation(detections, image):
         mc = assoc['motorcycle']
         for person in assoc['riders']:
             state, helmet_conf = detect_helmet_in_head_region(image, person['bbox'])
-            if state == HELMET_STATE_ABSENT:
+            # Generate violation for BOTH absent AND unknown helmet states.
+            # HELMET_UNKNOWN means uncertain but possible non-compliance.
+            confidence = round(helmet_conf, 3)
+            if state in (HELMET_STATE_ABSENT, HELMET_STATE_UNKNOWN):
+                severity = config.RISK_SCORES.get('NO_HELMET', 30)
+                # Reduce severity for uncertain cases
+                if state == HELMET_STATE_UNKNOWN:
+                    severity = max(15, severity - 10)
                 violations.append({
                     'violation_type': 'NO_HELMET',
-                    'confidence': round(helmet_conf, 3),
+                    'confidence': confidence,
                     'helmet_state': state,
+                    'helmet_confidence': confidence,
                     'person_bbox': person['bbox'],
                     'motorcycle_bbox': mc['bbox'],
-                    'severity_score': config.RISK_SCORES.get('NO_HELMET', 30),
+                    'severity_score': severity,
                     'description': f'{person.get("instance_id", "Rider")} without helmet on {mc.get("instance_id", "motorcycle")}',
                     'involved_objects': [
                         person.get('instance_id', 'person'),

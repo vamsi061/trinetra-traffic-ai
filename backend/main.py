@@ -61,7 +61,7 @@ def _helmet_compliance(v):
     """Analyze helmet detection result with confidence-based reporting."""
     hstate = v.get('helmet_state', '')
     hconf = v.get('helmet_confidence', v.get('confidence', 0))
-    if hstate in ('HELMET_PRESENT', 'HELMET_UNKNOWN'):
+    if hstate == 'HELMET_PRESENT':
         return None
     if hstate == 'NO_HELMET':
         band = 'high' if hconf >= 0.8 else ('medium' if hconf >= 0.6 else 'low')
@@ -74,6 +74,13 @@ def _helmet_compliance(v):
             'status': f'{label_map.get(band, "Possible Helmet Non-Compliance")}',
             'confidence_band': band,
             'needs_review': band in ('low',) or v.get('needs_review', False),
+        }
+    if hstate == 'HELMET_UNKNOWN':
+        # Uncertain detection — possible non-compliance with verification
+        return {
+            'status': 'Possible Helmet Non-Compliance',
+            'confidence_band': 'low',
+            'needs_review': True,
         }
     return None
 
