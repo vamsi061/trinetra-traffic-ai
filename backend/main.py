@@ -300,9 +300,19 @@ async def detect_violations(file: UploadFile = File(...)):
     vehicles = [d for d in detections if d['class_id'] in (2, 3, 5, 7)]
     if vehicles:
         reader = LicensePlateReader()
-        biggest = max(vehicles, key=lambda v:
-            (v["bbox"][2] - v["bbox"][0]) * (v["bbox"][3] - v["bbox"][1]))
-        plate_text, plate_conf = reader.read_plate(processed, biggest["bbox"])
+        # Priority order for plate detection: cars first, then trucks/buses, finally motorcycles
+        vehs_by_type = sorted(vehicles, key=lambda v: {
+            2: 0,    # car — most likely to have readable plate
+            5: 1,    # bus
+            7: 2,    # truck
+            3: 3,    # motorcycle — smallest plate, hardest to read
+        }.get(v['class_id'], 9))
+        for veh in vehs_by_type:
+            text, conf = reader.read_plate(image, veh["bbox"])
+            if text and conf > plate_conf:
+                plate_text, plate_conf = text, conf
+                if conf >= 0.5:
+                    break
 
     vehicle_type = next(
         (config.VEHICLE_CLASSES[d["class_id"]] for d in detections

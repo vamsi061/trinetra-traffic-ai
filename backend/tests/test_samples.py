@@ -45,8 +45,8 @@ TEST_CASES = [
     ("ILLEGAL PARKING_001.png", ["POSSIBLE_ILLEGAL_PARKING"], "6149", "Illegal parking with plate"),
     ("ILLEGAL PARKING_002.png", ["POSSIBLE_ILLEGAL_PARKING"], None, "Illegal parking"),
     # OCR / plate
-    ("OCR_CLEAR_001.png", [], None, "Clear plate"),
-    ("OCR_CLEAR_002.png", [], None, "Clear plate"),
+    ("OCR_CLEAR_001.png", [], "KA", "Clear plate — should read plate"),
+    ("OCR_CLEAR_002.png", [], "MH", "Clear plate — should read plate"),
     # Edge cases
     ("PEDESTRIAN_001.png", [], None, "Pedestrian only — no violations"),
     ("CROWDED_001.png", [], None, "Crowded scene — no specific violations"),
