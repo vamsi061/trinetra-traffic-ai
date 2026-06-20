@@ -27,8 +27,9 @@ RUN cd frontend && npm install --quiet 2>&1 | tail -3 && npm run build 2>&1 | ta
 RUN mkdir -p /data && chmod -R 777 /data
 
 ENV DATA_DIR=/data
+ENV PYTHONPATH=/app/backend
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 7860
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860", "--app-dir", "/app/backend"]
