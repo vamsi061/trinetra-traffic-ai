@@ -333,7 +333,7 @@ async def detect_violations(file: UploadFile = File(...)):
         if occ >= 4 or crowded_scene:
             any_needs_review = True
 
-    evidence_path = generate_evidence(processed, detections, violations, (plate_text, plate_conf))
+    evidence_path = generate_evidence(processed, detections, violations, (plate_text, plate_conf), source_filename=file.filename)
 
     # Image Quality Assessment
     quality = assess_quality(image)
@@ -415,7 +415,8 @@ async def detect_violations(file: UploadFile = File(...)):
     license_plate_dict = {"number": plate_text, "confidence": round(plate_conf, 3), "visibility": plate_visibility} if plate_text else None
     evidence_report_path = generate_evidence_report(
         filepath, detections, violations,
-        license_plate_dict, quality, total_risk, risk_status
+        license_plate_dict, quality, total_risk, risk_status,
+        source_filename=file.filename
     )
 
     # Filter violations for response: skip NORMAL entries

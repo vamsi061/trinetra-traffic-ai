@@ -24,7 +24,7 @@ def get_color(label):
     return COLORS.get(label, COLORS['default'])
 
 
-def generate_evidence(original_image, detections, violations, plate_info):
+def generate_evidence(original_image, detections, violations, plate_info, source_filename="image"):
     image = original_image.copy()
     height, width = image.shape[:2]
 
@@ -95,7 +95,8 @@ def generate_evidence(original_image, detections, violations, plate_info):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
             y_offset += 20
 
+    source_basename = os.path.splitext(os.path.basename(source_filename))[0]
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-    evidence_path = os.path.join(config.EVIDENCE_DIR, f'evidence_{timestamp}.jpg')
+    evidence_path = os.path.join(config.EVIDENCE_DIR, f'{source_basename}_evidence_{timestamp}.jpg')
     cv2.imwrite(evidence_path, image)
     return evidence_path

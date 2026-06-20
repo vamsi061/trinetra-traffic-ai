@@ -5,7 +5,7 @@ from fpdf import FPDF
 import config
 
 
-def generate_evidence_report(image_path, detections, violations, license_plate, quality, risk_score, risk_status):
+def generate_evidence_report(image_path, detections, violations, license_plate, quality, risk_score, risk_status, source_filename=None):
     """Generate a PDF evidence package for officer review."""
     os.makedirs(config.REPORT_DIR, exist_ok=True)
     report_id = uuid.uuid4().hex[:12]
@@ -133,6 +133,7 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
     pdf.cell(0, 5, 'TRINETRA AI - AI-Powered Traffic Enforcement Intelligence Platform', new_x="LMARGIN", new_y="NEXT", align='C')
     pdf.cell(0, 5, 'This report is for officer review. Enforcement decisions require human verification.', new_x="LMARGIN", new_y="NEXT", align='C')
 
-    report_path = os.path.join(config.REPORT_DIR, f"evidence_{report_id}.pdf")
+    source_basename = os.path.splitext(os.path.basename(source_filename or image_path))[0]
+    report_path = os.path.join(config.REPORT_DIR, f"{source_basename}_report_{report_id}.pdf")
     pdf.output(report_path)
     return report_path
