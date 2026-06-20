@@ -12,10 +12,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Install CPU-only PyTorch first (smaller image), then other deps
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Override with CPU-only torch + torchvision (compatible version pair)
+RUN pip install --no-cache-dir --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # Copy code
 COPY . .
