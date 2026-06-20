@@ -35,10 +35,11 @@ def assess_quality(image):
     if contrast < 30:
         issues.append('Low Contrast')
 
-    # Fog/haze detection (dark channel prior approximation)
+    # Fog/haze detection — require BOTH desaturation AND other quality issue
+    # to avoid false positives on clear daylight road scenes (gray roads are naturally desaturated)
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     saturation = hsv[:, :, 1].mean()
-    if saturation < 30 and mean_brightness > 100:
+    if saturation < 25 and mean_brightness > 100 and (laplacian_var < 80 or contrast < 35):
         issues.append('Fog/Haze')
 
     # Shadow detection (large dark regions)
