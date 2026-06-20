@@ -4,8 +4,13 @@ WORKDIR /app
 
 # System deps for OpenCV
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 22
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install CPU-only PyTorch first (smaller image), then other deps
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
@@ -16,7 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Build frontend
-RUN cd frontend && npm install --quiet 2>/dev/null && npm run build 2>/dev/null
+RUN cd frontend && npm install --quiet 2>&1 | tail -3 && npm run build 2>&1 | tail -5
 
 # Data dir for persistent storage
 RUN mkdir -p /data && chmod -R 777 /data
