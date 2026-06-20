@@ -48,6 +48,7 @@ export interface Violation {
   escalation?: string
   reliability_badge: ReliabilityBadge
   helmet_compliance?: HelmetCompliance | null
+  helmet_reason?: string
   involved_objects: string[]
   severity_score?: number
   needs_review?: boolean
@@ -71,6 +72,7 @@ export interface DetectResponse {
   crowded_scene?: boolean
   compliance_status?: string
   compliance_reason?: string
+  helmet_model?: { loaded: boolean; model_name: string; classes: Record<number, string> }
   helmet_non_compliance_count?: number
   ai_review_recommended?: boolean
   operational_intelligence?: OperationalIntelligence

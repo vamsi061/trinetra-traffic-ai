@@ -18,6 +18,7 @@ from ai.parking_detector import check_illegal_parking
 from ai.evidence_package import generate_evidence_report
 
 from ai.rider_association import associate_riders, classify_occupancy
+from ai.helmet_detector import get_helmet_service, HELMET_STATE_PRESENT, HELMET_STATE_ABSENT, HELMET_STATE_UNKNOWN
 from ai.ocr import LicensePlateReader
 from ai.evidence_generator import generate_evidence
 from ai.repeat_offender import register_violation, get_top_offenders, search_offender
@@ -426,6 +427,10 @@ async def detect_violations(file: UploadFile = File(...)):
     else:
         reliability_override = None
 
+    # Helmet model diagnostics
+    helmet_service = get_helmet_service()
+    helmet_model_info = helmet_service.get_model_info()
+
     return {
         "success": True,
         "detections": [
@@ -443,6 +448,7 @@ async def detect_violations(file: UploadFile = File(...)):
         "motorcycle_riders": motorcycle_riders,
         "compliance_status": compliance_status,
         "compliance_reason": compliance_reason,
+        "helmet_model": helmet_model_info,
         "violations": [
             {
                 "type": v["violation_type"],
@@ -457,6 +463,7 @@ async def detect_violations(file: UploadFile = File(...)):
                 "escalation": v.get("escalation", ""),
                 "reliability_badge": reliability_override if (compliance_status == 'COMPLIANT' and reliability_override) else v["reliability_badge"],
                 "helmet_compliance": v.get("helmet_compliance"),
+                "helmet_reason": v.get("helmet_reason", ""),
                 "involved_objects": v.get("involved_objects", []),
                 "severity_score": v.get("severity_score", config.RISK_SCORES.get(v["violation_type"], 0)),
                 "needs_review": v.get("needs_review", False),
