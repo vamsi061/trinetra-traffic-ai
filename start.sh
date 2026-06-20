@@ -11,7 +11,15 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 VENV_DIR="$ROOT_DIR/venv"
-PYTHON="${PYTHON:-python3}"
+
+# Auto-detect Python (python3 on macOS/Linux, python on Windows/Git Bash)
+PYTHON=""
+for cmd in python3 python; do
+    if command -v "$cmd" &>/dev/null; then
+        PYTHON="$cmd"
+        break
+    fi
+done
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -32,13 +40,6 @@ check_cmd() {
 }
 
 install_python_deps() {
-    VENV_DIR="$ROOT_DIR/venv"
-    if [ -d "/tmp/opencode/trinetra-venv" ] && [ ! -d "$VENV_DIR" ]; then
-        info "Reusing existing virtual environment..."
-        cp -r /tmp/opencode/trinetra-venv "$VENV_DIR"
-        ok "Copied existing venv"
-    fi
-
     if [ ! -d "$VENV_DIR" ]; then
         info "Creating Python virtual environment..."
         $PYTHON -m venv "$VENV_DIR"
@@ -46,7 +47,7 @@ install_python_deps() {
     fi
 
     source "$VENV_DIR/bin/activate"
-    pip install --upgrade pip -q 2>/dev/null
+    $PYTHON -m pip install --upgrade pip -q 2>/dev/null
 
     info "Installing/verifying Python dependencies..."
     pip install -r "$BACKEND_DIR/requirements.txt"
@@ -54,11 +55,7 @@ install_python_deps() {
 }
 
 install_frontend_deps() {
-    check_cmd "node"
-    check_cmd "npm"
-
     info "Checking Node.js dependencies..."
-
     if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
         info "Installing frontend dependencies..."
         cd "$FRONTEND_DIR"
@@ -124,8 +121,9 @@ echo "  ╚═══════════════════════
 echo -e "${NC}"
 
 # Check system requirements
-check_cmd "$PYTHON"
-check_cmd "pip"
+if [ -z "$PYTHON" ]; then
+    fail "Python is not installed. Install Python 3.8+ first."
+fi
 check_cmd "node"
 check_cmd "npm"
 
