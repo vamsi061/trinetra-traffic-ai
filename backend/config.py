@@ -32,6 +32,8 @@ CLASS_NAMES = {
     3: 'motorcycle',
     5: 'bus',
     7: 'truck',
+    9: 'traffic light',
+    11: 'stop sign',
 }
 
 VIOLATION_TYPES = {
@@ -39,6 +41,10 @@ VIOLATION_TYPES = {
     'TRIPLE_RIDING': 'Triple Riding',
     'MOTORCYCLE_OVERLOADING': 'Motorcycle Overloading',
     'MOTORCYCLE_EXTREME_OVERLOADING': 'Extreme Overloading',
+    'SEATBELT_VIOLATION': 'Seatbelt Violation',
+    'WRONG_SIDE_DRIVING': 'Wrong Side Driving',
+    'RED_LIGHT_VIOLATION': 'Red Light Violation',
+    'STOP_LINE_VIOLATION': 'Stop Line Violation',
 }
 
 RISK_SCORES = {
@@ -46,6 +52,10 @@ RISK_SCORES = {
     'TRIPLE_RIDING': 75,
     'MOTORCYCLE_OVERLOADING': 95,
     'MOTORCYCLE_EXTREME_OVERLOADING': 98,
+    'SEATBELT_VIOLATION': 40,
+    'WRONG_SIDE_DRIVING': 85,
+    'RED_LIGHT_VIOLATION': 90,
+    'STOP_LINE_VIOLATION': 60,
 }
 
 # Confidence thresholds

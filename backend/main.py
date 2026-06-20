@@ -15,6 +15,10 @@ from ai.helmet_detector import check_helmet_violation
 from ai.triple_riding import check_triple_riding
 from ai.quality_assessment import assess_quality
 from ai.parking_detector import check_illegal_parking
+from ai.seatbelt_detector import check_seatbelt_violation
+from ai.wrong_side_detector import check_wrong_side_violation
+from ai.red_light_detector import check_red_light_violation
+from ai.stop_line_detector import check_stop_line_violation
 from ai.evidence_package import generate_evidence_report
 
 from ai.rider_association import associate_riders, classify_occupancy
@@ -114,6 +118,22 @@ ENFORCEMENT_RECS = {
         'action': 'Vehicle Inspection Recommended: Priority review. Document all occupants. Public safety concern.',
         'escalation': 'Coordinate with traffic enforcement unit for vehicle inspection review.',
     },
+    'SEATBELT_VIOLATION': {
+        'action': 'Officer Review Recommended: Issue advisory for seatbelt non-compliance. Verify occupant safety at next checkpoint.',
+        'escalation': 'Monitor repeat cases. Persistent offenders: schedule enforcement follow-up.',
+    },
+    'WRONG_SIDE_DRIVING': {
+        'action': 'Urgent Officer Review: Dangerous driving behaviour. Immediate enforcement action recommended.',
+        'escalation': 'High-risk violation. Coordinate with traffic enforcement unit for intercept operation.',
+    },
+    'RED_LIGHT_VIOLATION': {
+        'action': 'Officer Review Required: Red light crossing detected. Verify with video evidence if available.',
+        'escalation': 'Dangerous violation. Schedule targeted enforcement at this intersection if recurring.',
+    },
+    'STOP_LINE_VIOLATION': {
+        'action': 'Officer Review Recommended: Stop line violation. Verify context before issuing notice.',
+        'escalation': 'Monitor intersection for recurring stop line violations.',
+    },
 }
 
 # ————— Occupancy Estimate —————
@@ -173,6 +193,14 @@ def _build_explainable_reason(violation_type, details):
         reason = f"{prefix} — Extreme overloading. {occ_est} — public safety concern. Evidence: excessive number of persons on single motorcycle. Confidence: {confidence_pct}. {review_note}"
     elif violation_type == 'POSSIBLE_ILLEGAL_PARKING':
         reason = f"{prefix} — Possible illegal parking detected. Vehicle positioned in restricted zone. Evidence: spatial analysis of vehicle position relative to roadway features. {review_note}"
+    elif violation_type == 'SEATBELT_VIOLATION':
+        reason = f"{prefix} — Seatbelt non-compliance detected. Vehicle occupant torso region analysed and no diagonal seatbelt strap found. Evidence: visual analysis of driver/passenger torso. {review_note}"
+    elif violation_type == 'WRONG_SIDE_DRIVING':
+        reason = f"{prefix} — Wrong-side driving detected. Vehicle positioned on incorrect side of road based on lane line analysis. Evidence: lane orientation and vehicle position relative to road centre. {review_note}"
+    elif violation_type == 'RED_LIGHT_VIOLATION':
+        reason = f"{prefix} — Red light violation detected. Vehicle crossed intersection while traffic signal was red. Evidence: traffic light colour analysis and vehicle position past stop line. {review_note}. Note: video verification recommended for temporal confirmation."
+    elif violation_type == 'STOP_LINE_VIOLATION':
+        reason = f"{prefix} — Stop line violation detected. Vehicle crossed designated stop line at intersection. Evidence: visual detection of stop line marking and vehicle position relative to it. {review_note}"
     else:
         reason = f"{prefix} — traffic violation detected. Confidence: {confidence_pct}. {review_note}"
     return reason
@@ -244,8 +272,15 @@ async def detect_violations(file: UploadFile = File(...)):
 
     # ————— Violation Detection Loop —————
     violations = []
-    for fn in [check_helmet_violation, check_triple_riding]:
-        for v in fn(detections, processed if fn is check_triple_riding else image):
+    for fn in [check_helmet_violation, check_triple_riding, check_seatbelt_violation,
+               check_wrong_side_violation, check_red_light_violation, check_stop_line_violation]:
+        img_arg = image
+        if fn is check_triple_riding:
+            img_arg = processed
+        elif fn in (check_red_light_violation, check_stop_line_violation,
+                    check_seatbelt_violation, check_wrong_side_violation):
+            img_arg = processed
+        for v in fn(detections, img_arg):
             # FIX: Skip NORMAL (non-violation) entries from triple_riding
             if v['violation_type'] == 'NORMAL':
                 continue
@@ -276,6 +311,8 @@ async def detect_violations(file: UploadFile = File(...)):
     ALL_VIOLATION_TYPES = (
         'NO_HELMET', 'TRIPLE_RIDING', 'MOTORCYCLE_OVERLOADING',
         'MOTORCYCLE_EXTREME_OVERLOADING', 'POSSIBLE_ILLEGAL_PARKING',
+        'SEATBELT_VIOLATION', 'WRONG_SIDE_DRIVING',
+        'RED_LIGHT_VIOLATION', 'STOP_LINE_VIOLATION',
     )
     has_actual_violations = any(
         vt in ALL_VIOLATION_TYPES

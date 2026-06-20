@@ -15,7 +15,9 @@ COLORS = {
     'plate': (0, 255, 255),
     'overloading': (255, 100, 150),
     'wrong_side': (255, 0, 255),
-    'overloading': (0, 0, 255),
+    'seatbelt': (255, 165, 0),
+    'red_light': (255, 0, 0),
+    'stop_line': (128, 0, 128),
     'default': (255, 255, 255),
 }
 
@@ -76,6 +78,27 @@ def generate_evidence(original_image, detections, violations, plate_info, source
                 cv2.rectangle(image, (x1, y1), (x2, y2), COLORS['wrong_side'], 3)
                 cv2.putText(image, 'WRONG SIDE', (x1, y1 - 25),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, COLORS['wrong_side'], 2)
+        elif vtype == 'SEATBELT_VIOLATION':
+            if 'person_bbox' in violation:
+                x1, y1, x2, y2 = [int(v) for v in violation['person_bbox']]
+                cv2.rectangle(image, (x1, y1), (x2, y2), COLORS['seatbelt'], 3)
+                cv2.putText(image, 'NO SEATBELT', (x1, y1 - 25),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, COLORS['seatbelt'], 2)
+            if 'vehicle_bbox' in violation:
+                x1, y1, x2, y2 = [int(v) for v in violation['vehicle_bbox']]
+                cv2.rectangle(image, (x1, y1), (x2, y2), COLORS['seatbelt'], 2)
+        elif vtype == 'RED_LIGHT_VIOLATION':
+            if 'vehicle_bbox' in violation:
+                x1, y1, x2, y2 = [int(v) for v in violation['vehicle_bbox']]
+                cv2.rectangle(image, (x1, y1), (x2, y2), COLORS['red_light'], 4)
+                cv2.putText(image, 'RED LIGHT VIOLATION', (x1, y1 - 25),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, COLORS['red_light'], 2)
+        elif vtype == 'STOP_LINE_VIOLATION':
+            if 'vehicle_bbox' in violation:
+                x1, y1, x2, y2 = [int(v) for v in violation['vehicle_bbox']]
+                cv2.rectangle(image, (x1, y1), (x2, y2), COLORS['stop_line'], 3)
+                cv2.putText(image, 'STOP LINE VIOLATION', (x1, y1 - 25),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, COLORS['stop_line'], 2)
 
     if plate_info and plate_info[0]:
         plate_text, plate_conf = plate_info

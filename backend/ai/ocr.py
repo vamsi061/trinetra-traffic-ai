@@ -27,12 +27,8 @@ class LicensePlateReader:
         x1, y1, x2, y2 = [int(v) for v in vehicle_bbox]
         h = y2 - y1
         w = x2 - x1
-        veh_cy = (y1 + y2) / 2
         img_h, img_w = image.shape[:2]
 
-        # For motorcycles: plate is usually at the rear (lower back) or front
-        # For cars: plate is at front/rear center, typically lower portion
-        # Use a broader region: lower 50% of vehicle, slightly inset from sides
         plate_y1 = y1 + int(h * 0.45)
         plate_y2 = y2
         plate_x1 = x1 + int(w * 0.05)
@@ -57,7 +53,6 @@ class LicensePlateReader:
         return image[y1:y2, x1:x2]
 
     def validate_plate_format(self, text):
-        """Accept common Indian and international plate formats."""
         if len(text) < 4:
             return False
         patterns = [
@@ -70,7 +65,6 @@ class LicensePlateReader:
         ]
         if any(re.match(p, text) for p in patterns):
             return True
-        # Fallback: at least 4 chars with mixed letters and digits
         has_letter = any(c.isalpha() for c in text)
         has_digit = any(c.isdigit() for c in text)
         return has_letter and has_digit and len(text) >= 4
@@ -92,71 +86,118 @@ class LicensePlateReader:
                     plate_candidates.append((x, y, w, h))
         return plate_candidates
 
+    def _combine_fragments(self, results):
+        if not results:
+            return '', 0.0
+
+        filtered = []
+        for bbox, text, conf in results:
+            if conf < config.OCR_CONFIDENCE_THRESHOLD:
+                continue
+            cleaned = re.sub(r'[^A-Za-z0-9]', '', text).upper()
+            if len(cleaned) < 2:
+                continue
+            xs = [p[0] for p in bbox]
+            cx = sum(xs) / len(xs)
+            filtered.append({'text': cleaned, 'conf': conf, 'cx': cx})
+
+        if not filtered:
+            return '', 0.0
+
+        filtered.sort(key=lambda x: x['cx'])
+
+        # Combine all fragments sorted left-to-right
+        combined = ''.join(g['text'] for g in filtered)
+        avg_conf = sum(g['conf'] for g in filtered) / len(filtered)
+        if self.validate_plate_format(combined):
+            return combined, avg_conf
+
+        # Try subsets (drop leftmost or rightmost outlier)
+        for drop_end in ('left', 'right'):
+            subset = filtered[1:] if drop_end == 'left' else filtered[:-1]
+            if len(subset) < 2:
+                continue
+            combined = ''.join(g['text'] for g in subset)
+            avg_conf = sum(g['conf'] for g in subset) / len(subset)
+            if self.validate_plate_format(combined):
+                return combined, avg_conf
+
+        # Last resort: best individual fragment
+        best_text, best_conf = '', 0.0
+        for g in filtered:
+            if self.validate_plate_format(g['text']) and g['conf'] > best_conf:
+                best_text, best_conf = g['text'], g['conf']
+
+        return best_text, best_conf
+
     def _run_easyocr(self, image):
-        """Run easyocr and return (text, confidence) or ('', 0.0)."""
         if not EASYOCR_AVAILABLE:
             return '', 0.0
         self.load_reader()
         if not self.reader:
             return '', 0.0
         results = self.reader.readtext(image)
-        best_text, best_conf = '', 0.0
-        for bbox, text, conf in results:
-            if conf >= config.OCR_CONFIDENCE_THRESHOLD:
-                cleaned = re.sub(r'[^A-Za-z0-9]', '', text).upper()
-                if len(cleaned) >= 4 and self.validate_plate_format(cleaned):
-                    if conf > best_conf:
-                        best_text, best_conf = cleaned, conf
-        return best_text, best_conf
+        return self._combine_fragments(results)
 
-    def _preprocess_for_ocr(self, region):
-        """Try multiple preprocessing and return best result."""
-        gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
-        best_text, best_conf = self._run_easyocr(region)
-        if best_text and best_conf >= 0.4:
-            return best_text, best_conf
-
-        methods = [
-            ('grayscale', gray),
-            ('clahe', cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)),
-            ('otsu', cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]),
-            ('adaptive', cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)),
-            ('bilateral', cv2.bilateralFilter(gray, 9, 75, 75)),
-        ]
-        for name, proc in methods:
-            text, conf = self._run_easyocr(proc)
-            if text and conf > best_conf:
-                best_text, best_conf = text, conf
-            if best_conf >= 0.6:
-                break
-        return best_text, best_conf
+    def _upscale_region(self, region, target_height=200):
+        h, w = region.shape[:2]
+        if h < target_height:
+            scale = target_height / h
+            new_w = int(w * scale)
+            return cv2.resize(region, (new_w, target_height), interpolation=cv2.INTER_CUBIC)
+        return region
 
     def read_plate(self, image, vehicle_bbox):
-        # Strategy 1: Extract lower portion of vehicle (standard plate position)
+        full = self.extract_full_vehicle_region(image, vehicle_bbox)
+        best_text, best_conf = '', 0.0
+
+        if full is not None and full.size > 0 and full.shape[0] > 20 and full.shape[1] > 20:
+            # Upscale for better OCR
+            upscaled = self._upscale_region(full)
+            gray = cv2.cvtColor(upscaled, cv2.COLOR_BGR2GRAY)
+
+            # Try multiple preprocessing methods on the full region
+            methods = [
+                ('raw_bgr', upscaled),
+                ('grayscale', gray),
+                ('clahe', cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)),
+                ('otsu', cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]),
+                ('adaptive', cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)),
+                ('bilateral', cv2.bilateralFilter(gray, 9, 75, 75)),
+            ]
+
+            for name, proc in methods:
+                text, conf = self._run_easyocr(proc)
+                if text and conf > best_conf:
+                    best_text, best_conf = text, conf
+                # Prefer longer text (more complete plate)
+                if text and len(text) >= len(best_text) and conf >= best_conf - 0.1:
+                    best_text, best_conf = text, max(best_conf, conf)
+                if best_text and len(best_text) >= 8 and best_conf >= 0.4:
+                    return best_text, best_conf
+
+        # Fallback: lower region for cars
+        if best_text and best_conf >= 0.3:
+            return best_text, best_conf
+
         region = self.extract_plate_region(image, vehicle_bbox)
         if region is not None and region.size > 0:
-            text, conf = self._preprocess_for_ocr(region)
-            if text and conf >= 0.3:
-                return text, conf
+            text, conf = self._run_easyocr(region)
+            if text and conf > best_conf:
+                best_text, best_conf = text, conf
 
-        # Strategy 2: Try full vehicle region (useful for angled/motorcycle plates)
-        full = self.extract_full_vehicle_region(image, vehicle_bbox)
-        if full is not None and full.size > 0 and full.shape[0] > 20 and full.shape[1] > 20:
-            text, conf = self._run_easyocr(full)
-            if text and conf >= 0.3:
-                return text, conf
-
-        # Strategy 3: Contour-based plate detection
-        if region is not None and region.size > 0:
-            candidates = self.find_plate_contours(region)
+        # Contour fallback
+        if full is not None and full.size > 0 and not best_text:
+            candidates = self.find_plate_contours(full)
             if candidates:
                 for x, y, w, h in candidates:
-                    plate_roi = region[y:y+h, x:x+w]
+                    plate_roi = full[y:y+h, x:x+w]
                     if plate_roi.size > 0:
-                        gray = cv2.cvtColor(plate_roi, cv2.COLOR_BGR2GRAY)
+                        up = self._upscale_region(plate_roi)
+                        gray = cv2.cvtColor(up, cv2.COLOR_BGR2GRAY)
                         _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
                         text, conf = self._run_easyocr(thresh)
-                        if text and conf >= 0.3:
-                            return text, conf
+                        if text and conf > best_conf:
+                            best_text, best_conf = text, conf
 
-        return '', 0.0
+        return best_text, best_conf

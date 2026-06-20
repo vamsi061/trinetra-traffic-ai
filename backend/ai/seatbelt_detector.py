@@ -16,8 +16,17 @@ def iou(box1, box2):
 
 
 def is_person_in_car(person_bbox, car_bbox):
-    from ai.rider_association import person_in_car_expanded
-    return person_in_car_expanded(person_bbox, car_bbox)
+    """Strict check: person must be substantially inside the car bbox.
+    At least 40% of person area must overlap with car bbox (containment)."""
+    x1 = max(person_bbox[0], car_bbox[0])
+    y1 = max(person_bbox[1], car_bbox[1])
+    x2 = min(person_bbox[2], car_bbox[2])
+    y2 = min(person_bbox[3], car_bbox[3])
+    inter = max(0, x2 - x1) * max(0, y2 - y1)
+    person_area = (person_bbox[2] - person_bbox[0]) * (person_bbox[3] - person_bbox[1])
+    if person_area <= 0:
+        return False
+    return inter / person_area >= 0.40
 
 
 def detect_seatbelt_in_torso(image, person_bbox):
@@ -68,33 +77,44 @@ def detect_seatbelt_in_torso(image, person_bbox):
 
 
 def check_seatbelt_violation(detections, image):
-    """Seatbelt detection ONLY for car occupants — disabled for motorcycle scenes."""
+    """Seatbelt detection ONLY for car occupants — one violation per car."""
     persons = [d for d in detections if d['class_id'] == config.PERSON_CLASS_ID]
     cars = [d for d in detections if d['class_id'] == config.CAR_CLASS_ID]
 
-    # Disable seatbelt detection if no cars are present (motorcycle-only scene)
     if not cars:
         return []
 
     violations = []
 
-    for person in persons:
-        for car in cars:
+    for car in cars:
+        car_area = (car['bbox'][2] - car['bbox'][0]) * (car['bbox'][3] - car['bbox'][1])
+        best_person = None
+        best_overlap = 0.0
+
+        for person in persons:
+            if person['confidence'] < 0.5:
+                continue
             if is_person_in_car(person['bbox'], car['bbox']):
-                has_seatbelt = detect_seatbelt_in_torso(image, person['bbox'])
-                if has_seatbelt is False:
-                    violations.append({
-                        'violation_type': 'SEATBELT_VIOLATION',
-                        'confidence': person['confidence'],
-                        'confidence_band': 'medium' if person['confidence'] >= 0.6 else 'low',
-                        'person_bbox': person['bbox'],
-                        'vehicle_bbox': car['bbox'],
-                        'severity_score': config.RISK_SCORES.get('SEATBELT_VIOLATION', 40),
-                        'description': f'{person.get("instance_id", "Person")} without seatbelt in {car.get("instance_id", "car")}',
-                        'involved_objects': [
-                            person.get('instance_id', 'person'),
-                            car.get('instance_id', 'car'),
-                        ],
-                    })
-                break
+                inter_area = max(0, min(person['bbox'][2], car['bbox'][2]) - max(person['bbox'][0], car['bbox'][0])) * \
+                             max(0, min(person['bbox'][3], car['bbox'][3]) - max(person['bbox'][1], car['bbox'][1]))
+                if inter_area > best_overlap:
+                    best_overlap = inter_area
+                    best_person = person
+
+        if best_person and best_overlap > 0:
+            has_seatbelt = detect_seatbelt_in_torso(image, best_person['bbox'])
+            if has_seatbelt is False:
+                violations.append({
+                    'violation_type': 'SEATBELT_VIOLATION',
+                    'confidence': best_person['confidence'],
+                    'confidence_band': 'medium' if best_person['confidence'] >= 0.6 else 'low',
+                    'person_bbox': best_person['bbox'],
+                    'vehicle_bbox': car['bbox'],
+                    'severity_score': config.RISK_SCORES.get('SEATBELT_VIOLATION', 40),
+                    'description': f'{best_person.get("instance_id", "Person")} without seatbelt in {car.get("instance_id", "car")}',
+                    'involved_objects': [
+                        best_person.get('instance_id', 'person'),
+                        car.get('instance_id', 'car'),
+                    ],
+                })
     return violations
