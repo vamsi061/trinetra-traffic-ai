@@ -129,16 +129,16 @@ def _person_is_background(person_bbox, motorcycle_bbox, img_shape):
     # Person is far away (small bbox relative to motorcycle)
     p_area = (p_x2 - p_x1) * (p_y2 - p_y1)
     m_area = m_w * m_h
-    if m_area > 0 and p_area / m_area < 0.15:
+    if m_area > 0 and p_area / m_area < 0.08:
         return True
 
     # Person is too small to be a real rider (low-light false positive)
     p_h = p_y2 - p_y1
-    if p_h < 30:
+    if p_h < 25:
         return True
 
     # Person is far to the side beyond reasonable riding position
-    if abs(p_cx - m_cx) > m_w * 0.9 and p_cy > m_cy:
+    if abs(p_cx - m_cx) > m_w * 1.2 and p_cy > m_cy:
         return True
 
     return False
@@ -163,7 +163,7 @@ def associate_riders(persons, motorcycles, img_shape=(None, None)):
 
     h, w = img_shape[:2] if img_shape and img_shape[0] else (480, 640)
     diag = np.sqrt(h ** 2 + w ** 2)
-    MIN_ASSOCIATION_THRESHOLD = 0.40
+    MIN_ASSOCIATION_THRESHOLD = 0.30
 
     person_scores = []
     for p in persons:
@@ -171,33 +171,28 @@ def associate_riders(persons, motorcycles, img_shape=(None, None)):
         if p.get('confidence', 0) < 0.35:
             continue
 
-        # First pass: filter background persons and check overlap
+        # First pass: filter background persons and find best motorcycle
         best_score = 0.0
         best_mc_idx = -1
         best_details = {}
 
         for j, mc in enumerate(motorcycles):
-            # FIX 2: Background person filter
+            # Background person filter
             if _person_is_background(p['bbox'], mc['bbox'], img_shape):
-                continue
-
-            # FIX 1: Require bounding box overlap
-            iou, has_overlap = _bbox_overlap(p['bbox'], mc['bbox'])
-            if not has_overlap:
                 continue
 
             score, details = compute_rider_score(p['bbox'], mc['bbox'], img_shape)
 
-            # Apply overlap bonus: if IoU is significant, boost score
-            if iou > 0.05:
-                score = min(score + iou * 0.3, 1.0)
+            # Boost score if bboxes overlap
+            iou, has_overlap = _bbox_overlap(p['bbox'], mc['bbox'])
+            if has_overlap:
+                score = min(score + 0.15, 1.0)
 
             if score > best_score:
                 best_score = score
                 best_mc_idx = j
                 best_details = details
 
-        # FIX 1: Much stricter threshold (0.35 vs previous 0.15)
         if best_score >= MIN_ASSOCIATION_THRESHOLD and best_mc_idx >= 0:
             person_scores.append({
                 'person': p,
