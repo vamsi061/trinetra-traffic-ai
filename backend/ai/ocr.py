@@ -67,7 +67,9 @@ class LicensePlateReader:
             return True
         has_letter = any(c.isalpha() for c in text)
         has_digit = any(c.isdigit() for c in text)
-        return has_letter and has_digit and len(text) >= 4
+        # A valid plate should start with a letter (reversed text like "1234BKAOI" starts with digit)
+        starts_with_letter = text[0].isalpha()
+        return has_letter and has_digit and len(text) >= 4 and starts_with_letter
 
     def find_plate_contours(self, region):
         gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
@@ -122,6 +124,12 @@ class LicensePlateReader:
             if self.validate_plate_format(combined):
                 return combined, avg_conf
 
+        # Try reversed fragment order (EasyOCR may return RTL in some images)
+        filtered_rev = list(reversed(filtered))
+        combined_rev = ''.join(g['text'] for g in filtered_rev)
+        if self.validate_plate_format(combined_rev):
+            return combined_rev, avg_conf
+
         # Last resort: best individual fragment
         best_text, best_conf = '', 0.0
         for g in filtered:
@@ -168,17 +176,20 @@ class LicensePlateReader:
 
             for name, proc in methods:
                 text, conf = self._run_easyocr(proc)
-                # Prefer longer text (more complete plate), but only if strictly longer
-                # or if same length with strictly higher confidence
                 if text:
-                    if len(text) > len(best_text) and conf >= best_conf - 0.1:
+                    # Prefer text that matches a valid plate format
+                    text_valid = self.validate_plate_format(text)
+                    best_valid = self.validate_plate_format(best_text) if best_text else False
+                    if text_valid and not best_valid:
+                        best_text, best_conf = text, conf
+                    elif not text_valid and best_valid:
+                        pass
+                    elif len(text) > len(best_text) and conf >= best_conf - 0.1:
                         best_text, best_conf = text, max(best_conf, conf)
                     elif len(text) == len(best_text) and conf > best_conf:
                         best_text, best_conf = text, conf
                     elif not best_text:
                         best_text, best_conf = text, conf
-                if best_text and len(best_text) >= 8 and best_conf >= 0.4:
-                    return best_text, best_conf
 
         # Fallback: lower region for cars
         if best_text and best_conf >= 0.3:

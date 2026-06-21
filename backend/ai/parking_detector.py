@@ -131,9 +131,9 @@ def check_illegal_parking(detections, image_shape, moving_vehicle_hint=False):
     h, w = image_shape[:2]
     violations = []
 
-    # FIX 3: Moving vehicle check — skip if rider mounted in travel lane
-    if moving_vehicle_hint or _is_mounted_rider(detections):
-        logger.debug("Skipping parking analysis: vehicle appears in active traffic flow")
+    # Moving vehicle hint — skip parking entirely if caller explicitly says so
+    if moving_vehicle_hint:
+        logger.debug("Skipping parking analysis: moving_vehicle_hint=True")
         return violations
 
     vehicles = [d for d in detections if d['class_id'] in (2, 3, 5, 7)]
