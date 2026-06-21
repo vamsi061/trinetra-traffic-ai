@@ -354,18 +354,30 @@ export default function Upload() {
   const [owlvitDownloadResult, setOwlvitDownloadResult] = useState<OwlVitDownloadResult | null>(null)
   const [fileSelected, setFileSelected] = useState<File | null>(null)
 
-  // Load available engines and OwlViT compat on mount
-  useEffect(() => {
+  const refreshEngines = useCallback(() => {
     getDetectionEngines().then(res => {
       setEngines(res.engines)
-      // Pre-set engine based on availability
       const preferred = res.engines.find(e => e.id === 'locateanything' && e.token_set)
-      if (preferred) {
+      if (preferred && selectedEngine === 'auto') {
         setSelectedEngine('locateanything')
       }
     }).catch(() => {})
     checkOwlvitCompat().then(setOwlvitCompat).catch(() => {})
-  }, [])
+  }, [selectedEngine])
+
+  // Refresh engines when a file is selected (ensures config changes are reflected)
+  useEffect(() => {
+    if (fileSelected) {
+      refreshEngines()
+    }
+  }, [fileSelected, refreshEngines])
+
+  // Also listen for config changes from the sidebar modal
+  useEffect(() => {
+    const handler = () => refreshEngines()
+    window.addEventListener('engine-config-changed', handler)
+    return () => window.removeEventListener('engine-config-changed', handler)
+  }, [refreshEngines])
 
   // Re-check compat when owlvit_local is selected
   useEffect(() => {
@@ -418,16 +430,14 @@ export default function Upload() {
       const res = await downloadOwlvitModel()
       setOwlvitDownloadResult(res)
       if (res.success) {
-        // Re-check availability
-        const enginesRes = await getDetectionEngines()
-        setEngines(enginesRes.engines)
+        refreshEngines()
       }
     } catch (e: any) {
       setOwlvitDownloadResult({ success: false, message: e?.message || 'Download failed', model_path: '', model_size_mb: 0 })
     } finally {
       setOwlvitDownloading(false)
     }
-  }, [])
+  }, [refreshEngines])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

@@ -47,6 +47,10 @@ function ConfigModal({ close }: { close: () => void }) {
 
   useEffect(() => { refresh() }, [])
 
+  const emitConfigChange = () => {
+    try { window.dispatchEvent(new CustomEvent('engine-config-changed')) } catch {}
+  }
+
   const handleSaveToken = async () => {
     if (!hfTokenInput.trim()) return
     setSavingToken(true)
@@ -56,6 +60,7 @@ function ConfigModal({ close }: { close: () => void }) {
       setTokenSaved('saved')
       setHfTokenInput('')
       refresh()
+      emitConfigChange()
       setTimeout(() => setTokenSaved('idle'), 3000)
     } catch {
       setTokenSaved('error')
@@ -71,6 +76,7 @@ function ConfigModal({ close }: { close: () => void }) {
       const res = await downloadOwlvitModel()
       setDownloadResult(res)
       refresh()
+      emitConfigChange()
     } catch {
       setDownloadResult({ success: false, message: 'Download failed. Check server logs.', model_path: '', model_size_mb: 0 })
     } finally {
