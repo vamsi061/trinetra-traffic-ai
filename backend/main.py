@@ -10,6 +10,23 @@ from fastapi.staticfiles import StaticFiles
 import cv2
 import numpy as np
 
+DETECTION_SOURCES = {
+    'NO_HELMET': 'YOLOv8 Helmet Model / HSV Fallback',
+    'TRIPLE_RIDING': 'Rider Association Scoring',
+    'MOTORCYCLE_OVERLOADING': 'Rider Association Scoring',
+    'MOTORCYCLE_EXTREME_OVERLOADING': 'Rider Association Scoring',
+    'POSSIBLE_ILLEGAL_PARKING': 'Spatial Analysis + Geometric Rules',
+    'SEATBELT_VIOLATION': 'YOLOv8 + HSV Analysis',
+    'WRONG_SIDE_DRIVING': 'Lane Orientation Analysis',
+    'RED_LIGHT_VIOLATION': 'Traffic Light Color Detection',
+    'STOP_LINE_VIOLATION': 'Hough Transform + Geometric Validation',
+    'POSSIBLE_STOP_LINE_VIOLATION': 'Hough Transform + Geometric Validation',
+}
+
+
+def _detection_source_for(vtype):
+    return DETECTION_SOURCES.get(vtype, 'Automated Detection')
+
 from utils.image_processing import enhance_image, create_comparison, analyze_image_quality, get_enhancement_report
 from ai.locate_anything import LocateAnythingDetector, check_owlvit_compatibility, download_owlvit_model, ENGINE_LABELS
 from ai.helmet_detector import check_helmet_violation
@@ -36,6 +53,7 @@ from ai.vehicle_risk import compute_vehicle_risk_profile
 from ai.scene_reasoning import SceneReasoningService
 from ai.ai_verifier import AIVerificationEngine
 from ai.confidence_fusion import fuse_violation, fuse_ocr
+from ai.violation_selector import select_primary
 from database.db import (
     init_db, insert_violation, get_all_violations,
     get_statistics, get_violations_by_type, get_violations_by_day,
@@ -136,8 +154,8 @@ ENFORCEMENT_RECS = {
         'escalation': 'Dangerous violation. Schedule targeted enforcement at this intersection if recurring.',
     },
     'STOP_LINE_VIOLATION': {
-        'action': 'Officer Review Recommended: Stop line violation. Verify context before issuing notice.',
-        'escalation': 'Monitor intersection for recurring stop line violations.',
+        'action': 'Manual Verification Required: Possible stop line crossing detected. Verify context before issuing notice.',
+        'escalation': 'Monitor intersection for recurring stop line crossings.',
     },
 }
 
@@ -211,29 +229,74 @@ def _build_explainable_reason(violation_type, details):
     return reason
 
 
+def _print_banner(label, status):
+    pad = 54 - len(label) - len(status)
+    return f"  {label}{'.' * pad}{status}"
+
+
 def _check_helmet_model():
     """Startup validation: check helmet model, log status, fail loudly if missing after acquisition."""
     model_path = os.path.join(os.path.dirname(__file__), 'models', 'helmet_yolov8n.pt')
     exists = os.path.exists(model_path)
     border = "=" * 60
     print(f"\n{border}")
+    print(f"  SYSTEM HEALTH")
+    print(f"  {'-' * 56}")
     if exists:
         size = os.path.getsize(model_path) / (1024 * 1024)
-        print(f"  HELMET MODEL: FOUND ({model_path}) — {size:.1f} MB")
         try:
             from ultralytics import YOLO
             model = YOLO(model_path)
-            print(f"  CLASSES: {model.names}")
-            print(f"  STATUS: READY")
+            print(_print_banner('YOLOv8', 'ACTIVE'))
+            print(_print_banner(f'Helmet Model ({size:.1f} MB)', 'ACTIVE'))
         except Exception as e:
-            print(f"  STATUS: FAILED TO LOAD — {e}")
-            print(f"  ACTION: Run 'python download_helmet_model.py' to re-acquire")
-            sys.exit(1)
+            print(_print_banner('YOLOv8', 'ACTIVE'))
+            print(_print_banner('Helmet Model', 'FAILED'))
+            print(f"  ERROR: {e}")
     else:
-        print(f"  HELMET MODEL: NOT FOUND at {model_path}")
-        print(f"  STATUS: Using HSV fallback (limited accuracy)")
+        print(_print_banner('YOLOv8', 'ACTIVE'))
+        print(_print_banner('Helmet Model', 'MISSING'))
         print(f"  ACTION: Run 'python download_helmet_model.py' to download")
         print(f"  SOURCE: https://huggingface.co/iam-tsr/yolov8n-helmet-detection")
+
+    # Check Florence-2
+    scene_loaded = False
+    try:
+        import os as _os
+        _os.environ['TORCHDYNAMO_DISABLE'] = '1'
+        from transformers import AutoModelForCausalLM, AutoProcessor
+        import einops, timm
+        model_id = 'microsoft/Florence-2-base'
+        _ = AutoProcessor.from_pretrained(
+            model_id, trust_remote_code=True
+        )
+        _ = AutoModelForCausalLM.from_pretrained(
+            model_id, trust_remote_code=True, local_files_only=False,
+            attn_implementation='eager'
+        )
+        scene_loaded = True
+    except Exception:
+        pass
+    if scene_loaded:
+        print(_print_banner('Scene Reasoning', 'ACTIVE'))
+        print(_print_banner('Model', 'Florence-2'))
+        print(_print_banner('Inference', 'Running'))
+    else:
+        print(_print_banner('Scene Reasoning', 'TEMPLATE'))
+        print(_print_banner('Model', 'Template Fallback'))
+        print(_print_banner('Inference', 'N/A'))
+
+    # Check OCR
+    try:
+        from paddleocr import PaddleOCR
+        print(_print_banner('OCR Engine', 'PaddleOCR'))
+    except ImportError:
+        try:
+            import easyocr
+            print(_print_banner('OCR Engine', 'EasyOCR'))
+        except ImportError:
+            print(_print_banner('OCR Engine', 'UNAVAILABLE'))
+
     print(f"{border}\n")
     return exists
 
@@ -402,6 +465,7 @@ async def detect_violations(
         'MOTORCYCLE_EXTREME_OVERLOADING', 'POSSIBLE_ILLEGAL_PARKING',
         'SEATBELT_VIOLATION', 'WRONG_SIDE_DRIVING',
         'RED_LIGHT_VIOLATION', 'STOP_LINE_VIOLATION',
+        'POSSIBLE_STOP_LINE_VIOLATION',
     )
     has_actual_violations = any(
         vt in ALL_VIOLATION_TYPES
@@ -547,6 +611,9 @@ async def detect_violations(
         v['fused_confidence'] = fused['fused']
         v['confidence_sources'] = fused['sources_used']
 
+    # ————— Violation Prioritization & False Positive Suppression —————
+    violations, primary_finding = select_primary(violations, scene_info, detections)
+
     # Pedestrian stats
     person_detections = [d for d in detections if d['label'] == 'person']
     pedestrian_count = len(person_detections)
@@ -601,13 +668,15 @@ async def detect_violations(
 
     # Generate evidence report
     license_plate_dict = {"number": plate_text, "confidence": round(plate_conf, 3), "visibility": plate_visibility} if plate_text else None
+    scene_info_with_primary = dict(scene_info)
+    scene_info_with_primary['primary_finding'] = primary_finding
     evidence_report_path = generate_evidence_report(
         filepath, detections, violations,
         license_plate_dict, quality, total_risk, risk_status,
         source_filename=file.filename,
         enhancement_report=enhancement_report,
         quality_analysis=quality_analysis,
-        scene_understanding=scene_info,
+        scene_understanding=scene_info_with_primary,
         ai_review_panel=ai_review,
     )
 
@@ -641,6 +710,9 @@ async def detect_violations(
     helmet_service = get_helmet_service()
     helmet_model_info = helmet_service.get_model_info()
 
+    # Pedestrian count (persons not associated as riders)
+    pedestrians_not_riders = max(0, pedestrian_count - sum(mr.get('rider_count', 0) for mr in motorcycle_riders))
+
     return {
         "success": True,
         "detections": [
@@ -662,7 +734,13 @@ async def detect_violations(
         "compliance_reason": compliance_reason,
         "detection_model": detection_model_info,
         "helmet_model": helmet_model_info,
-        "startup_diagnostics": {
+        "system_health": {
+            "model_status": {
+                "yolov8": "ACTIVE",
+                "helmet_model": "ACTIVE" if helmet_model_info.get('loaded') else "MISSING",
+                "scene_reasoning": "ACTIVE" if scene_info.get('analysis_type') == 'florence-2' else "TEMPLATE",
+                "ocr": "ACTIVE" if plate_engine != 'none' else "FALLBACK",
+            },
             "helmet_model": {
                 "status": "loaded" if helmet_model_info.get('loaded') else "not_found",
                 "path": "backend/models/helmet_yolov8n.pt",
@@ -672,13 +750,16 @@ async def detect_violations(
                 "person_confidence_threshold": 0.25,
             },
         },
+        "pedestrians_not_riders": pedestrians_not_riders,
         "violations": [
             {
-                "type": v["violation_type"],
+                "type": v.get("display_type", v["violation_type"].replace("_", " ").title()),
+                "violation_type": v["violation_type"],
                 "confidence": round(v["confidence"], 3),
                 "confidence_band": v.get("confidence_band", "medium"),
                 "confidence_label": _confidence_label(v.get("confidence_band", "medium")),
                 "description": v.get("description", ""),
+                "detection_source": v.get("detection_source", _detection_source_for(v["violation_type"])),
                 "occupancy_estimate": v["occupancy_estimate"],
                 "explainable_reason": _build_explainable_reason(v["violation_type"], v),
                 "human_review_status": v["human_review_status"],
@@ -691,6 +772,10 @@ async def detect_violations(
                 "severity_score": v.get("severity_score", config.RISK_SCORES.get(v["violation_type"], 0)),
                 "needs_review": v.get("needs_review", False),
                 "officer_priority": v.get("officer_priority", "MEDIUM PRIORITY"),
+                "is_primary_finding": v.get("_is_primary", False),
+                "evidence_score": round(v.get("_evidence_score", 1.0), 3),
+                "priority_score": round(v.get("_priority_score", 0), 3),
+                "suppressed": v.get("_suppressed", False),
             }
             for v in response_violations
         ],
@@ -701,13 +786,15 @@ async def detect_violations(
         "ai_review_recommended": ai_review_needed,
         "operational_intelligence": {
             "mode": "Traffic Enforcement Intelligence Center",
-            "note": "All violations include confidence-based reporting, explainable AI reasoning, human review status, and enforcement recommendations."
+            "note": "All observed findings include source attribution, confidence-based reporting, assessment method, human review status, and enforcement recommendations."
         },
         "scene_understanding": {
             "narrative": scene_info.get('narrative', ''),
             "analysis_type": scene_info.get('analysis_type', 'template'),
             "reasoning_confidence": scene_info.get('confidence', 0),
         },
+        "scene_breakdown": scene_info.get('scene_breakdown', {}),
+        "primary_finding": primary_finding,
         "ai_review_panel": ai_review,
         "ocr_engine": plate_engine if plate_text else None,
         "license_plate": {"number": plate_text, "confidence": round(plate_conf, 3), "visibility": plate_visibility, "ocr_engine": plate_engine} if plate_text else None,

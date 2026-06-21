@@ -94,16 +94,21 @@ def check_stop_line_violation(detections, image):
             
         if is_vehicle_past_stop_line(veh['bbox'], stop_line, image):
             vtype = config.VEHICLE_CLASSES.get(veh['class_id'], 'vehicle')
+            raw_confidence = 0.50
+            is_low_conf = raw_confidence < 0.70
             violations.append({
                 'violation_type': 'STOP_LINE_VIOLATION',
-                'confidence': 0.50,
+                'display_type': 'Possible Stop Line Violation' if is_low_conf else 'Stop Line Violation',
+                'confidence': raw_confidence,
                 'confidence_band': 'low',
+                'detection_source': 'Hough Transform + Geometric Validation',
                 'vehicle_bbox': veh['bbox'],
                 'vehicle_type': vtype,
                 'severity_score': config.RISK_SCORES.get('STOP_LINE_VIOLATION', 60),
                 'stop_line_y': int(stop_line['cy']),
                 'description': f'{veh.get("instance_id", vtype)} crossed stop line',
                 'involved_objects': [veh.get('instance_id', vtype)],
+                'needs_review': is_low_conf,
             })
 
     return violations

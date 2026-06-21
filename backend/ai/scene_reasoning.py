@@ -9,54 +9,79 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-def _describe_objects(detections, motorcycle_riders, crowded):
-    """Generate human-readable scene description from detections."""
-    labels = [d['label'] for d in detections]
-    counts = {lbl: labels.count(lbl) for lbl in set(labels)}
-    parts = []
+def _scene_composition(detections, motorcycle_riders):
+    """Build structured scene breakdown.
 
-    mc_count = counts.get('motorcycle', 0)
-    person_count = counts.get('person', 0)
-    car_count = counts.get('car', 0)
-    truck_count = counts.get('truck', 0)
-    bus_count = counts.get('bus', 0)
+    Returns dict with motorcycle_count, car_count, bus_count, truck_count,
+    visible_persons, associated_riders, pedestrians.
+    """
+    labels = [d['label'] for d in detections]
+    total_persons = labels.count('person')
+    total_riders = sum(mc.get('rider_count', 0) for mc in (motorcycle_riders or []))
+    pedestrians = max(0, total_persons - total_riders)
+
+    return {
+        'motorcycles': labels.count('motorcycle'),
+        'cars': labels.count('car'),
+        'buses': labels.count('bus'),
+        'trucks': labels.count('truck'),
+        'visible_persons': total_persons,
+        'associated_riders': total_riders,
+        'pedestrians': pedestrians,
+        'bicycles': labels.count('bicycle'),
+    }
+
+
+def _officer_narrative(detections, violations, motorcycle_riders, crowded,
+                       license_plate, quality_score, enhancement_info):
+    """Generate officer-readable intelligence narrative."""
+    comp = _scene_composition(detections, motorcycle_riders)
+    lines = []
+
+    mc_count = comp['motorcycles']
+    car_count = comp['cars']
+    bus_count = comp['buses']
+    truck_count = comp['trucks']
+    total_persons = comp['visible_persons']
+    total_riders = comp['associated_riders']
+    pedestrians = comp['pedestrians']
 
     if mc_count == 1:
-        parts.append('One motorcycle')
+        lines.append('One motorcycle detected.')
     elif mc_count > 1:
-        parts.append(f'{mc_count} motorcycles')
-
+        lines.append(f'{mc_count} motorcycles detected.')
     if car_count == 1:
-        parts.append('one car')
+        lines.append('One car present.')
     elif car_count > 1:
-        parts.append(f'{car_count} cars')
-    if truck_count > 0:
-        parts.append(f'{truck_count} truck{"s" if truck_count > 1 else ""}')
+        lines.append(f'{car_count} cars present.')
     if bus_count > 0:
-        parts.append(f'{bus_count} bus{"es" if bus_count > 1 else ""}')
+        lines.append(f'{bus_count} bus{"es" if bus_count > 1 else ""} present.')
+    if truck_count > 0:
+        lines.append(f'{truck_count} truck{"s" if truck_count > 1 else ""} present.')
 
-    if person_count == 1:
-        parts.append('one person')
-    elif person_count > 1:
-        parts.append(f'{person_count} persons')
+    if total_persons == 0:
+        lines.append('No persons detected in the scene.')
+    elif total_persons == 1:
+        if total_riders == 1:
+            lines.append('One individual is associated with a motorcycle as a rider.')
+        else:
+            lines.append('One person is visible in the scene and classified as a pedestrian.')
+    else:
+        lines.append(f'{total_persons} people visible in the scene.')
+        if total_riders > 0:
+            rider_label = 'individuals are' if total_riders > 1 else 'individual is'
+            lines.append(
+                f'{total_riders} {rider_label} associated with '
+                f'{"a motorcycle" if mc_count == 1 else "motorcycles"} as riders.'
+            )
+        if pedestrians > 0:
+            ped_label = 'additional individuals are' if pedestrians > 1 else 'additional individual is'
+            lines.append(f'{pedestrians} {ped_label} classified as pedestrians.')
 
-    if not parts:
-        return 'No significant objects detected in the scene.'
-
-    description = ', with '.join(parts)
-    description = description[0].upper() + description[1:] + '.'
-
-    if motorcycle_riders:
-        rider_info = []
-        for mc in motorcycle_riders:
-            count = mc.get('rider_count', 1)
-            est = mc.get('occupancy_estimate', f'{count} occupants')
-            rider_info.append(est)
-        description += f' Occupancy: {", ".join(rider_info)}.'
     if crowded:
-        description += ' Scene is crowded.'
+        lines.append('Scene density is elevated — multiple subjects in frame.')
 
-    return description
+    return ' '.join(lines)
 
 
 def _assess_road_conditions(detections, violations):
@@ -82,10 +107,13 @@ def _assess_road_conditions(detections, violations):
 def _generate_narrative(detections, violations, motorcycle_riders, crowded,
                         license_plate, quality_score, enhancement_info):
     """Generate full narrative scene interpretation."""
-    obj_desc = _describe_objects(detections, motorcycle_riders, crowded)
+    obj_desc = _officer_narrative(detections, violations, motorcycle_riders,
+                                   crowded, license_plate, quality_score,
+                                   enhancement_info)
     road_conds = _assess_road_conditions(detections, violations)
 
     lines = [obj_desc]
+
     if road_conds:
         lines.append(' '.join(road_conds) + '.')
 
@@ -94,12 +122,12 @@ def _generate_narrative(detections, violations, motorcycle_riders, crowded,
                           for v in violations))
         if vtypes:
             vdesc = ', '.join(vt.replace('_', ' ').title() for vt in vtypes)
-            lines.append(f'Violation(s) detected: {vdesc}.')
+            lines.append(f'Observed Findings: {vdesc}.')
 
     if license_plate and license_plate.get('number'):
         lines.append(
             f'License plate {license_plate["number"]} '
-            f'(confidence: {license_plate.get("confidence", 0)*100:.0f}%).'
+            f'(OCR confidence: {license_plate.get("confidence", 0)*100:.0f}%).'
         )
 
     if quality_score:
@@ -132,14 +160,17 @@ class SceneReasoningService:
         if self._loaded:
             return
         try:
-            from transformers import AutoModelForCausalLM, AutoProcessor
+            import os
+            os.environ['TORCHDYNAMO_DISABLE'] = '1'
+            from transformers import AutoModelForCausalLM, AutoProcessor, PretrainedConfig
             logger.info('Loading Florence-2...')
             model_id = 'microsoft/Florence-2-base'
-            self._model = AutoModelForCausalLM.from_pretrained(
-                model_id, trust_remote_code=True, local_files_only=False
-            )
             self._processor = AutoProcessor.from_pretrained(
                 model_id, trust_remote_code=True
+            )
+            self._model = AutoModelForCausalLM.from_pretrained(
+                model_id, trust_remote_code=True, local_files_only=False,
+                attn_implementation='eager'
             )
             self._loaded = True
             logger.info('Florence-2 loaded successfully')
@@ -162,7 +193,7 @@ class SceneReasoningService:
             enhancement_report: dict with enhancement info
 
         Returns:
-            dict with narrative, analysis_type, confidence
+            dict with narrative, analysis_type, confidence, scene_breakdown
         """
         self._try_load_florence2()
 
@@ -194,21 +225,26 @@ class SceneReasoningService:
             pixel_values=inputs['pixel_values'],
             max_new_tokens=200,
             num_beams=3,
+            use_cache=False,
         )
         caption = self._processor.batch_decode(
             generated_ids, skip_special_tokens=True
         )[0]
 
+        breakdown = _scene_composition(detections, motorcycle_riders)
+
         return {
             'narrative': caption.strip(),
             'analysis_type': 'florence-2',
             'confidence': 0.75,
+            'scene_breakdown': breakdown,
         }
 
     def _reason_template(self, detections, violations, motorcycle_riders,
                           crowded, license_plate, quality_score,
                           enhancement_report):
         """Generate scene description from detection data alone."""
+        breakdown = _scene_composition(detections, motorcycle_riders)
         narrative = _generate_narrative(
             detections, violations, motorcycle_riders, crowded,
             license_plate, quality_score, enhancement_report
@@ -217,6 +253,7 @@ class SceneReasoningService:
             'narrative': narrative,
             'analysis_type': 'template',
             'confidence': 0.65,
+            'scene_breakdown': breakdown,
         }
 
     def get_model_info(self):

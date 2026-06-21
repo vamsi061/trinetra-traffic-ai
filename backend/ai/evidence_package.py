@@ -5,6 +5,26 @@ from fpdf import FPDF
 import config
 
 
+DETECTION_SOURCE_LABELS = {
+    'NO_HELMET': 'YOLOv8 Helmet Model / HSV Fallback',
+    'TRIPLE_RIDING': 'Rider Association Scoring',
+    'MOTORCYCLE_OVERLOADING': 'Rider Association Scoring',
+    'MOTORCYCLE_EXTREME_OVERLOADING': 'Rider Association Scoring',
+    'POSSIBLE_ILLEGAL_PARKING': 'Spatial Analysis + Geometric Rules',
+    'SEATBELT_VIOLATION': 'YOLOv8 + HSV Analysis',
+    'WRONG_SIDE_DRIVING': 'Lane Orientation Analysis',
+    'RED_LIGHT_VIOLATION': 'Traffic Light Color Detection',
+    'STOP_LINE_VIOLATION': 'Hough Transform + Geometric Validation',
+    'POSSIBLE_STOP_LINE_VIOLATION': 'Hough Transform + Geometric Validation',
+}
+
+
+def _detection_source(v):
+    return v.get('detection_source') or DETECTION_SOURCE_LABELS.get(
+        v.get('violation_type', ''), 'Automated Detection'
+    )
+
+
 def generate_evidence_report(image_path, detections, violations, license_plate, quality, risk_score, risk_status, source_filename=None, enhancement_report=None, quality_analysis=None, scene_understanding=None, ai_review_panel=None):
     """Generate a PDF evidence package for officer review."""
     os.makedirs(config.REPORT_DIR, exist_ok=True)
@@ -162,20 +182,75 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
         pdf.cell(col_w[1], 7, str(count), border=1, new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
-    # ——— 4. Detected Violations ———
+    # ——— 3b. Scene Breakdown ———
+    if scene_understanding and scene_understanding.get('scene_breakdown'):
+        sb = scene_understanding['scene_breakdown']
+        pdf.set_font('Helvetica', 'B', 13)
+        pdf.set_text_color(20, 60, 120)
+        pdf.cell(0, 9, '3b. Scene Composition', new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(1)
+
+        sb_items = [
+            ('Motorcycles', sb.get('motorcycles', 0)),
+            ('Cars', sb.get('cars', 0)),
+            ('Buses', sb.get('buses', 0)),
+            ('Trucks', sb.get('trucks', 0)),
+            ('Visible Persons', sb.get('visible_persons', 0)),
+            ('Associated Riders', sb.get('associated_riders', 0)),
+            ('Pedestrians', sb.get('pedestrians', 0)),
+        ]
+        pdf.set_font('Helvetica', 'B', 10)
+        pdf.set_fill_color(235, 240, 250)
+        pdf.set_draw_color(180, 190, 210)
+        pdf.cell(col_w[0], 7, 'Category', border=1, fill=True)
+        pdf.cell(col_w[1], 7, 'Count', border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        for label, count in sb_items:
+            pdf.cell(col_w[0], 7, label, border=1)
+            pdf.cell(col_w[1], 7, str(count), border=1, new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(4)
+
+    # ——— 3c. Primary Finding ———
+    primary_finding = scene_understanding.get('primary_finding') if scene_understanding else None
+    if primary_finding:
+        pdf.set_font('Helvetica', 'B', 13)
+        pdf.set_text_color(180, 40, 20)
+        pdf.cell(0, 9, '3c. Primary Finding', new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(1)
+        pdf.set_font('Helvetica', 'B', 11)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 7, primary_finding.get('type', primary_finding.get('violation_type', 'Unknown')), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font('Helvetica', '', 10)
+        for label, value in [
+            ('Type', primary_finding.get('violation_type', 'N/A')),
+            ('Confidence', f"{primary_finding.get('confidence', 0)*100:.1f}%"),
+            ('Evidence Score', f"{primary_finding.get('evidence_score', 0)*100:.1f}%"),
+            ('Priority Score', f"{primary_finding.get('priority_score', 0)*100:.1f}%"),
+            ('Reason', primary_finding.get('reason', 'N/A')),
+            ('Review Required', 'Yes' if primary_finding.get('needs_review') else 'No'),
+            ('Enforcement', primary_finding.get('enforcement_recommendation', 'N/A')),
+        ]:
+            pdf.set_font('Helvetica', 'B', 10)
+            pdf.cell(36, 6, label + ':')
+            pdf.set_font('Helvetica', '', 10)
+            pdf.cell(0, 6, value, new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(3)
+
+    # ——— 4. Observed Findings ———
     pdf.set_font('Helvetica', 'B', 13)
     pdf.set_text_color(20, 60, 120)
-    pdf.cell(0, 9, '4. Detected Violations', new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 9, '4. Observed Findings', new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
 
     if not violations:
         pdf.set_font('Helvetica', 'I', 10)
         pdf.set_text_color(60, 60, 60)
-        pdf.cell(0, 7, 'No violations detected.', new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 7, 'No findings detected.', new_x="LMARGIN", new_y="NEXT")
     else:
         pdf.set_font('Helvetica', '', 8)
         pdf.set_text_color(0, 0, 0)
-        col_w = [38, 28, 24, 28, 22, 50]
+        col_w = [32, 22, 18, 30, 18, 18, 52]
         pdf.set_fill_color(235, 240, 250)
         with pdf.table(
             col_widths=col_w,
@@ -184,18 +259,20 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
             line_height=5,
         ) as table:
             hr = table.row()
-            hr.cell('Type')
+            hr.cell('Finding')
             hr.cell('Vehicle')
-            hr.cell('Confidence')
+            hr.cell('Conf.')
+            hr.cell('Detection Source')
             hr.cell('Review')
-            hr.cell('Priority')
+            hr.cell('Prior.')
             hr.cell('Recommendation')
             for v in violations:
-                vtype = v.get('type', v.get('violation_type', 'Unknown')).replace('_', ' ').title()
-                # Extract vehicle instance from involved_objects or description
-                involved = v.get('involved_objects', [])
-                if involved:
-                    vehicle_str = involved[0].replace('_', ' ').title()
+                suppressed = v.get('_suppressed', False)
+                is_primary = v.get('_is_primary', False)
+                vtype = v.get('display_type', v.get('type', v.get('violation_type', 'Unknown')).replace('_', ' ').title())
+                invo = v.get('involved_objects', [])
+                if invo:
+                    vehicle_str = invo[0].replace('_', ' ').title()
                 else:
                     desc = v.get('description', '')
                     vehicle_str = desc.split(' ')[0].replace('_', ' ').title() if desc else '—'
@@ -208,19 +285,28 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
                     conf = 'Low'
                 else:
                     conf = f"{v.get('confidence', 0)*100:.0f}%"
+                source = _detection_source(v)
                 review = v.get('human_review_status', 'N/A').replace('_', ' ').title()
                 pri = v.get('officer_priority', 'Medium').title()
                 rec = v.get('enforcement_recommendation', 'N/A')
+                if is_primary:
+                    vtype = f'[PRIMARY] {vtype}'
+                if suppressed:
+                    vtype = f'{vtype} (SUPPRESSED)'
+                    pdf.set_text_color(160, 160, 160)
                 row = table.row()
                 row.cell(vtype)
                 row.cell(vehicle_str)
                 row.cell(conf)
+                row.cell(source)
                 row.cell(review)
                 row.cell(pri)
                 row.cell(rec)
+                if suppressed:
+                    pdf.set_text_color(0, 0, 0)
         pdf.ln(4)
 
-    # ——— 5. Scene Understanding (AI Analysis) ———
+    # ——— 5. Scene Understanding (Assessment) ———
     if scene_understanding:
         pdf.set_draw_color(20, 60, 120)
         pdf.set_line_width(0.3)
@@ -229,7 +315,7 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
 
         pdf.set_font('Helvetica', 'B', 13)
         pdf.set_text_color(20, 60, 120)
-        pdf.cell(0, 9, '5. Scene Understanding (AI Analysis)', new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 9, '5. Scene Assessment', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(1)
 
         narrative = scene_understanding.get('narrative', '')
@@ -240,12 +326,12 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
         pdf.set_text_color(0, 0, 0)
         if narrative:
             pdf.set_font('Helvetica', 'I', 10)
-            pdf.multi_cell(0, 6, f'"{narrative}"')
+            pdf.multi_cell(0, 6, narrative)
             pdf.ln(2)
 
         for label, value in [
-            ('Analysis Engine', 'Florence-2' if analysis_type == 'florence-2' else 'Template-based'),
-            ('Reasoning Confidence', f'{reasoning_conf*100:.0f}%'),
+            ('Assessment Method', 'Florence-2' if analysis_type == 'florence-2' else 'Template-based'),
+            ('Assessment Confidence', f'{reasoning_conf*100:.0f}%'),
         ]:
             pdf.set_font('Helvetica', 'B', 10)
             pdf.cell(42, 7, label + ':')
@@ -253,7 +339,7 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
             pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
         pdf.ln(3)
 
-    # ——— 6. AI Verification Summary ———
+    # ——— 6. Automated Assessment Summary ———
     if ai_review_panel:
         pdf.set_draw_color(20, 60, 120)
         pdf.set_line_width(0.3)
@@ -262,7 +348,7 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
 
         pdf.set_font('Helvetica', 'B', 13)
         pdf.set_text_color(20, 60, 120)
-        pdf.cell(0, 9, '6. AI Verification Summary', new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 9, '6. Automated Assessment Summary', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(1)
 
         v_status = ai_review_panel.get('verification_status', 'N/A').replace('_', ' ').title()
@@ -274,14 +360,14 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
         pdf.set_font('Helvetica', '', 10)
         pdf.set_text_color(0, 0, 0)
         for label, value in [
-            ('Verification Status', v_status),
-            ('Verified Violations', str(v_verified)),
-            ('Unverified Violations', str(v_unverified)),
-            ('Avg Verification Confidence', f'{avg_conf*100:.0f}%' if avg_conf else 'N/A'),
+            ('Assessment Status', v_status),
+            ('Verified Findings', str(v_verified)),
+            ('Unverified Findings', str(v_unverified)),
+            ('Avg Assessment Confidence', f'{avg_conf*100:.0f}%' if avg_conf else 'N/A'),
             ('Enforcement Readiness', enforcement),
         ]:
             pdf.set_font('Helvetica', 'B', 10)
-            pdf.cell(50, 7, label + ':')
+            pdf.cell(52, 7, label + ':')
             pdf.set_font('Helvetica', '', 10)
             pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
         pdf.ln(3)
