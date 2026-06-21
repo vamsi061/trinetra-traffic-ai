@@ -235,7 +235,7 @@ export async function checkOwlvitCompat(): Promise<OwlVitCompat> {
 }
 
 export async function downloadOwlvitModel(): Promise<OwlVitDownloadResult> {
-  const { data } = await api.post('/detect/download-owlvit')
+  const { data } = await api.post('/detect/download-owlvit', undefined, { timeout: 600000 })
   return data
 }
 
