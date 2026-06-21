@@ -43,7 +43,7 @@ def _has_parking_context(detections, image_shape):
                 1 for p in persons
                 if abs((p['bbox'][1] + p['bbox'][3]) / 2 - veh_cy) < h * 0.25
             )
-            if nearby_pedestrians >= 4:
+            if nearby_pedestrians >= 6:
                 clues.append('roadside_parking_with_pedestrians')
 
         # Vehicle at extreme edge of frame → parked at roadside
@@ -112,7 +112,7 @@ def _is_in_travel_lane(veh, image_shape):
     return not_at_edge and in_mid_region
 
 
-def check_illegal_parking(detections, image_shape, moving_vehicle_hint=False):
+def check_illegal_parking(detections, image, moving_vehicle_hint=False):
     """Detect possible illegal parking from single image.
 
     Only flags parking when:
@@ -122,13 +122,13 @@ def check_illegal_parking(detections, image_shape, moving_vehicle_hint=False):
 
     Args:
         detections: list of detection dicts
-        image_shape: (height, width, channels)
+        image: numpy array (image.shape used for geometry)
         moving_vehicle_hint: if True, skip parking analysis entirely
 
     Returns:
         list of violation dicts (empty unless strong parking evidence)
     """
-    h, w = image_shape[:2]
+    h, w = image.shape[:2]
     violations = []
 
     # Moving vehicle hint — skip parking entirely if caller explicitly says so
@@ -142,7 +142,7 @@ def check_illegal_parking(detections, image_shape, moving_vehicle_hint=False):
         return violations
 
     # Check parking context
-    has_context, context_clues = _has_parking_context(detections, image_shape)
+    has_context, context_clues = _has_parking_context(detections, image.shape)
 
     if not has_context:
         logger.debug("Skipping parking analysis: no parking context evidence")
@@ -160,24 +160,24 @@ def check_illegal_parking(detections, image_shape, moving_vehicle_hint=False):
         has_nearby_pedestrians = sum(
             1 for p in persons
             if abs((p['bbox'][1] + p['bbox'][3]) / 2 - cy) < h * 0.12
-        ) >= 2
-        if _is_in_travel_lane(veh, image_shape) and not has_nearby_pedestrians:
+        ) >= 3
+        if _is_in_travel_lane(veh, image.shape) and not has_nearby_pedestrians:
             continue
 
         reasons = []
 
         # Blocking footpath: vehicle occupies lower image region across pedestrian path
-        footpath_zone_y = h * 0.80
-        if y1 > footpath_zone_y and box_w > w * 0.35 and box_h > h * 0.15:
+        footpath_zone_y = h * 0.85
+        if y1 > footpath_zone_y and box_w > w * 0.3 and box_h > h * 0.15:
             reasons.append('vehicle positioned across pedestrian pathway')
 
         # Blocking lane: vehicle extends across lane markings
-        if box_w > w * 0.5 and box_h > h * 0.2:
+        if box_w > w * 0.4 and box_h > h * 0.2:
             reasons.append('vehicle extends across lane width')
 
         # Stationary on curb-side: vehicle hugging edge
-        edge_margin = w * 0.05
-        if (cx < edge_margin or cx > w - edge_margin) and box_h < h * 0.3:
+        edge_margin = w * 0.04
+        if (cx < edge_margin or cx > w - edge_margin) and box_h < h * 0.35:
             reasons.append('vehicle stationary at roadside edge')
 
         # Parked with nearby pedestrians in lower portion of image
@@ -186,7 +186,7 @@ def check_illegal_parking(detections, image_shape, moving_vehicle_hint=False):
                 1 for p in persons
                 if abs((p['bbox'][1] + p['bbox'][3]) / 2 - cy) < h * 0.12
             )
-            if nearby_count >= 4:
+            if nearby_count >= 8:
                 reasons.append('vehicle stationary with pedestrian activity at roadside')
 
         if reasons:

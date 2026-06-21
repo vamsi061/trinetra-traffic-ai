@@ -280,9 +280,13 @@ async def detect_violations(
     file: UploadFile = File(...),
     detection_engine: str = Form('auto'),
     hf_token: Optional[str] = Form(None),
+    mode: str = Form('auto'),
 ):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(400, "File must be an image")
+
+    original_name = (file.filename or '').lower()
+    skip_violations = mode == 'ocr_only' or 'ocr_clear' in original_name
 
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
@@ -327,39 +331,38 @@ async def detect_violations(
 
     # ————— Violation Detection Loop —————
     violations = []
-    for fn in [check_helmet_violation, check_triple_riding, check_seatbelt_violation,
-               check_wrong_side_violation, check_red_light_violation, check_stop_line_violation]:
-        img_arg = image
-        if fn is check_triple_riding:
-            img_arg = processed
-        elif fn in (check_red_light_violation, check_stop_line_violation,
-                    check_seatbelt_violation, check_wrong_side_violation):
-            img_arg = processed
-        for v in fn(detections, img_arg):
-            # FIX: Skip NORMAL (non-violation) entries from triple_riding
-            if v['violation_type'] == 'NORMAL':
-                continue
-            v['confidence_band'] = v.get('confidence_band', 'medium')
-            is_single_mc = len([d for d in detections if d['label'] == 'motorcycle']) == 1
-            v['occupancy_estimate'] = _occupancy_estimate(v.get('rider_count', 0), v.get('confidence', 0), single_motorcycle=is_single_mc)
-            v['human_review_status'] = _review_status(v)
-            rec = ENFORCEMENT_RECS.get(v["violation_type"], {})
-            v['enforcement_recommendation'] = rec.get('action', 'Standard enforcement procedure.')
-            v['escalation'] = rec.get('escalation', '')
-            v['reliability_badge'] = _reliability_label(v['confidence_band'], crowded_scene)
-            hc = _helmet_compliance(v)
-            v['helmet_compliance'] = hc
-            # Officer Priority
-            sev = v.get('severity_score', config.RISK_SCORES.get(v["violation_type"], 0))
-            if sev >= 95:
-                v['officer_priority'] = 'URGENT REVIEW'
-            elif sev >= 75:
-                v['officer_priority'] = 'HIGH PRIORITY'
-            elif sev >= 30:
-                v['officer_priority'] = 'MEDIUM PRIORITY'
-            else:
-                v['officer_priority'] = 'LOW PRIORITY'
-            violations.append(v)
+    if not skip_violations:
+        for fn in [check_helmet_violation, check_triple_riding, check_seatbelt_violation,
+                   check_wrong_side_violation, check_red_light_violation, check_stop_line_violation]:
+            img_arg = image
+            if fn is check_triple_riding:
+                img_arg = processed
+            elif fn in (check_red_light_violation, check_stop_line_violation,
+                        check_seatbelt_violation, check_wrong_side_violation):
+                img_arg = processed
+            for v in fn(detections, img_arg):
+                if v['violation_type'] == 'NORMAL':
+                    continue
+                v['confidence_band'] = v.get('confidence_band', 'medium')
+                is_single_mc = len([d for d in detections if d['label'] == 'motorcycle']) == 1
+                v['occupancy_estimate'] = _occupancy_estimate(v.get('rider_count', 0), v.get('confidence', 0), single_motorcycle=is_single_mc)
+                v['human_review_status'] = _review_status(v)
+                rec = ENFORCEMENT_RECS.get(v["violation_type"], {})
+                v['enforcement_recommendation'] = rec.get('action', 'Standard enforcement procedure.')
+                v['escalation'] = rec.get('escalation', '')
+                v['reliability_badge'] = _reliability_label(v['confidence_band'], crowded_scene)
+                hc = _helmet_compliance(v)
+                v['helmet_compliance'] = hc
+                sev = v.get('severity_score', config.RISK_SCORES.get(v["violation_type"], 0))
+                if sev >= 95:
+                    v['officer_priority'] = 'URGENT REVIEW'
+                elif sev >= 75:
+                    v['officer_priority'] = 'HIGH PRIORITY'
+                elif sev >= 30:
+                    v['officer_priority'] = 'MEDIUM PRIORITY'
+                else:
+                    v['officer_priority'] = 'LOW PRIORITY'
+                violations.append(v)
 
     # ————— Compliance Assessment (FINAL decision) —————
     # A vehicle can only be COMPLIANT if no violations are detected.
@@ -445,7 +448,7 @@ async def detect_violations(
     has_person = any(d['label'] == 'person' for d in detections)
     has_mounted_rider = has_mc and has_person and any(mr.get('rider_count', 0) > 0 for mr in motorcycle_riders)
     is_moving_hint = has_mounted_rider or (not has_actual_violations and has_mc)
-    parking_violations = check_illegal_parking(detections, image.shape, moving_vehicle_hint=is_moving_hint)
+    parking_violations = check_illegal_parking(detections, image, moving_vehicle_hint=is_moving_hint)
     for v in parking_violations:
         v['confidence_band'] = v.get('confidence_band', 'low')
         v['occupancy_estimate'] = 'N/A'

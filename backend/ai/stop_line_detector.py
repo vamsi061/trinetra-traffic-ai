@@ -10,13 +10,16 @@ def detect_stop_lines(image):
 
     h, w = image.shape[:2]
 
-    # Focus on lower portion where stop lines are visible
-    roi_y1 = int(h * 0.4)
-    roi = edges[roi_y1:, :]
+    # Focus on lower-middle portion where stop lines are visible
+    roi_y1 = int(h * 0.50)
+    roi = edges[roi_y1:int(h * 0.85), :]
+
+    if roi.shape[0] < 20:
+        return []
 
     lines = cv2.HoughLinesP(
         roi, rho=1, theta=np.pi / 180,
-        threshold=30, minLineLength=int(w * 0.2), maxLineGap=20
+        threshold=50, minLineLength=int(w * 0.45), maxLineGap=20
     )
 
     if lines is None:
@@ -25,26 +28,38 @@ def detect_stop_lines(image):
     stop_lines = []
     for line in lines:
         x1, y1, x2, y2 = line[0]
-        # Horizontal-ish lines
         angle = abs(np.degrees(np.arctan2(y2 - y1, x2 - x1)))
-        if angle < 20 or angle > 160:
-            line_cx = (x1 + x2) / 2
-            line_cy = roi_y1 + (y1 + y2) / 2
-            stop_lines.append({
-                'x1': x1, 'y1': y1 + roi_y1,
-                'x2': x2, 'y2': y2 + roi_y1,
-                'cx': line_cx, 'cy': line_cy,
-                'length': np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2),
-            })
+        if angle > 10 and angle < 170:
+            continue
+
+        line_len = np.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+        if line_len < w * 0.45:
+            continue
+
+        line_cx = (x1 + x2) / 2
+        line_cy = roi_y1 + (y1 + y2) / 2
+
+        if line_cx < w * 0.30 or line_cx > w * 0.70:
+            continue
+        if line_cy > h * 0.85:
+            continue
+
+        stop_lines.append({
+            'x1': x1, 'y1': y1 + roi_y1,
+            'x2': x2, 'y2': y2 + roi_y1,
+            'cx': line_cx, 'cy': line_cy,
+            'length': line_len,
+        })
 
     return stop_lines
 
 
 def is_vehicle_past_stop_line(vehicle_bbox, stop_line, image):
-    """Check if vehicle center is below (past) the stop line."""
+    """Check if vehicle is clearly past the stop line."""
     _, y1, _, y2 = vehicle_bbox
     veh_center_y = (y1 + y2) / 2
-    return veh_center_y > stop_line['cy']
+    veh_bottom = y2
+    return veh_bottom > stop_line['cy'] and (veh_center_y - stop_line['cy']) > image.shape[0] * 0.03
 
 
 def check_stop_line_violation(detections, image):
@@ -63,6 +78,20 @@ def check_stop_line_violation(detections, image):
     stop_line = max(stop_lines, key=lambda s: s['length'])
 
     for veh in vehicles:
+        # Only consider vehicles that are large enough (close to camera)
+        veh_h = veh['bbox'][3] - veh['bbox'][1]
+        veh_w = veh['bbox'][2] - veh['bbox'][0]
+        veh_area = veh_h * veh_w
+        img_area = h * w
+        
+        # Vehicle must be at least 2% of image area to be considered
+        if veh_area / img_area < 0.02:
+            continue
+            
+        # Vehicle must be in the bottom half of the image
+        if veh['bbox'][3] < h * 0.45:
+            continue
+            
         if is_vehicle_past_stop_line(veh['bbox'], stop_line, image):
             vtype = config.VEHICLE_CLASSES.get(veh['class_id'], 'vehicle')
             violations.append({

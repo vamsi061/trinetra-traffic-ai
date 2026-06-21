@@ -69,15 +69,17 @@ def is_vehicle_wrong_side(vehicle_bbox, left_lines, right_lines, image_width):
     num_right = len(right_lines) if right_lines else 0
 
     total_lines = num_left + num_right
-    if total_lines < 4:
+    if total_lines < 6:
         return False, 0.0
 
+    # The dominant side must have at least 75% of lines
     ratio = max(num_left, num_right) / total_lines
-    if ratio < 0.7:
+    if ratio < 0.75:
         return False, 0.0
 
-    vehicle_center_is_left = vx < image_width * 0.4
-    vehicle_center_is_right = vx > image_width * 0.6
+    # Vehicle must be clearly on one side of the road
+    vehicle_center_is_left = vx < image_width * 0.35
+    vehicle_center_is_right = vx > image_width * 0.65
 
     more_left = num_left > num_right
 
@@ -101,7 +103,7 @@ def check_wrong_side_violation(detections, image):
         return violations
 
     left_lines, right_lines = classify_lane_lines(lines, image.shape[1])
-    if len(left_lines) + len(right_lines) < 4:
+    if len(left_lines) + len(right_lines) < 6:
         return violations
 
     for vehicle in vehicles:

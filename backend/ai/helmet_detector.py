@@ -157,8 +157,9 @@ def _hsv_helmet_detect(image, person_bbox):
     if person_h < 20 or person_w < 10:
         return HELMET_STATE_UNKNOWN, 0.0
 
-    # Head region: upper 30% of person bbox
-    head_y2 = y1 + int(person_h * 0.30)
+    # Analyze the upper portion of the head (top 25%) - enough to capture
+    # the helmet crown while minimizing face interference.
+    head_y2 = y1 + int(person_h * 0.25)
     head_region = image[y1:head_y2, x1:x2]
 
     if head_region.size == 0:
@@ -166,15 +167,24 @@ def _hsv_helmet_detect(image, person_bbox):
 
     h, w = head_region.shape[:2]
     total_pixels = h * w
-    if total_pixels == 0:
+    if total_pixels < 50:  # too small to analyze
         return HELMET_STATE_UNKNOWN, 0.0
 
     hsv = cv2.cvtColor(head_region, cv2.COLOR_BGR2HSV)
 
-    # CLAHE only for non-uniform regions
+    # Edge density analysis: hair has many fine edges, helmets have few.
+    # Pre-blur to suppress helmet surface texture while keeping hair edges.
+    gray_head = cv2.cvtColor(head_region, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray_head, (5, 5), 0)
+    edge_kernel = np.ones((3, 3), np.uint8)
+    edges = cv2.Canny(blurred, 40, 120)
+    edges = cv2.dilate(edges, edge_kernel, iterations=1)
+    edge_density = cv2.countNonZero(edges) / total_pixels
+    is_low_edge = edge_density < 0.25
+
+    # CLAHE for lighting normalization
     hsv_eq = hsv
     try:
-        gray_head = cv2.cvtColor(head_region, cv2.COLOR_BGR2GRAY)
         if gray_head.std() > 15:
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
             enhanced = clahe.apply(gray_head)
@@ -183,7 +193,8 @@ def _hsv_helmet_detect(image, person_bbox):
         pass
 
     kernel = np.ones((5, 5), np.uint8)
-    max_ratio = 0.0
+    max_blob_ratio = 0.0
+    best_color = None
 
     for color_name, (lower, upper) in config.HELMET_COLORS_HSV.items():
         lower = np.array(lower, dtype=np.uint8)
@@ -191,25 +202,37 @@ def _hsv_helmet_detect(image, person_bbox):
         mask = cv2.inRange(hsv, lower, upper)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-        ratio = cv2.countNonZero(mask) / total_pixels
+
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=8)
+        if num_labels > 1:
+            largest_blob_area = np.max(stats[1:, cv2.CC_STAT_AREA])
+            blob_ratio = largest_blob_area / total_pixels
+        else:
+            blob_ratio = 0.0
 
         if hsv_eq is not hsv:
             mask_eq = cv2.inRange(hsv_eq, lower, upper)
             mask_eq = cv2.morphologyEx(mask_eq, cv2.MORPH_CLOSE, kernel)
             mask_eq = cv2.morphologyEx(mask_eq, cv2.MORPH_OPEN, kernel)
-            ratio_eq = cv2.countNonZero(mask_eq) / total_pixels
-            ratio = max(ratio, ratio_eq)
 
-        if ratio > max_ratio:
-            max_ratio = ratio
+            num_labels_eq, labels_eq, stats_eq, _ = cv2.connectedComponentsWithStats(mask_eq, connectivity=8)
+            if num_labels_eq > 1:
+                largest_blob_area_eq = np.max(stats_eq[1:, cv2.CC_STAT_AREA])
+                blob_ratio_eq = largest_blob_area_eq / total_pixels
+            else:
+                blob_ratio_eq = 0.0
+            blob_ratio = max(blob_ratio, blob_ratio_eq)
 
-    # Decision with uncertainty (conservative — avoid false positives)
-    if max_ratio > 0.30:
-        return HELMET_STATE_PRESENT, min(max_ratio * 1.2, 1.0)
-    elif max_ratio > 0.10:
-        return HELMET_STATE_UNKNOWN, max(0.5, max_ratio)
-    else:
-        return HELMET_STATE_ABSENT, max_ratio
+        if blob_ratio > max_blob_ratio:
+            max_blob_ratio = blob_ratio
+            best_color = color_name
+
+    if is_low_edge:
+        if max_blob_ratio > 0.12:
+            return HELMET_STATE_PRESENT, min(max_blob_ratio * 1.2, 0.95)
+        return HELMET_STATE_UNKNOWN, max(0.30, max_blob_ratio)
+
+    return HELMET_STATE_ABSENT, min(0.70, max(0.40, 1.0 - edge_density))
 
 
 # ====== MAIN HELMET VIOLATION CHECK ======
@@ -275,8 +298,11 @@ def check_helmet_violation(detections, image):
     Returns:
         list of violation dicts
     """
-    persons = [d for d in detections if d['class_id'] == config.PERSON_CLASS_ID]
+    persons = [d for d in detections if d['class_id'] == config.PERSON_CLASS_ID and d.get('confidence', 0) >= 0.5]
     motorcycles = [d for d in detections if d['class_id'] == config.MOTORCYCLE_CLASS_ID]
+
+    if not persons or not motorcycles:
+        return []
 
     img_shape = image.shape[:2] if image is not None else (None, None)
     associations = associate_riders(persons, motorcycles, img_shape)
@@ -317,37 +343,24 @@ def check_helmet_violation(detections, image):
             # Step 2: No model association — try HSV fallback
             hsv_state, hsv_conf = _hsv_helmet_detect(image, person_bbox)
 
-            # When the YOLO model was available but found no matching detection
-            # for THIS rider, downgrade HSV HELMET_PRESENT to HELMET_UNKNOWN.
-            # The model couldn't see a head, so we can't trust HSV's "helmet present."
-            if model_available and model_checked_no_match and hsv_state == HELMET_STATE_PRESENT:
-                hsv_state = HELMET_STATE_UNKNOWN
-                hsv_conf = min(hsv_conf, 0.45)
-            elif model_available and not helmet_detections and hsv_state == HELMET_STATE_PRESENT:
-                hsv_state = HELMET_STATE_UNKNOWN
-                hsv_conf = min(hsv_conf, 0.45)
-
-            if model_available:
-                # Model is available but didn't match — rider head region unclear
-                # Still use HSV as secondary check but mark as lower confidence
-                if hsv_state in (HELMET_STATE_ABSENT, HELMET_STATE_UNKNOWN):
-                    severity = config.RISK_SCORES.get('NO_HELMET', 30)
-                    if hsv_state == HELMET_STATE_UNKNOWN:
-                        severity = max(15, severity - 10)
+            if hsv_state == HELMET_STATE_ABSENT:
+                # Confidently no helmet — flag as violation
+                if model_available:
                     violations.append(_make_violation(
-                        person, mc, max(0.5, hsv_conf), hsv_state, severity,
-                        'Helmet model: no matching detection. HSV analysis suggests possible non-compliance.'
+                        person, mc, hsv_conf, hsv_state, config.RISK_SCORES.get('NO_HELMET', 30),
+                        'Helmet model: no matching detection. HSV analysis confirms no protective headgear.'
                     ))
-            else:
-                # Model unavailable — use HSV as primary
-                if hsv_state in (HELMET_STATE_ABSENT, HELMET_STATE_UNKNOWN):
-                    severity = config.RISK_SCORES.get('NO_HELMET', 30)
-                    if hsv_state == HELMET_STATE_UNKNOWN:
-                        severity = max(15, severity - 10)
+                else:
                     violations.append(_make_violation(
-                        person, mc, hsv_conf, hsv_state, severity,
+                        person, mc, hsv_conf, hsv_state, config.RISK_SCORES.get('NO_HELMET', 30),
                         'HSV-based detection: rider without visible protective headgear.'
                     ))
+            elif hsv_state == HELMET_STATE_UNKNOWN and model_available:
+                # Model available but didn't match, HSV uncertain — flag for review
+                violations.append(_make_violation(
+                    person, mc, hsv_conf, hsv_state, max(15, config.RISK_SCORES.get('NO_HELMET', 30) - 10),
+                    'Helmet model: no matching detection. HSV analysis suggests possible non-compliance.'
+                ))
 
     # Log diagnostics
     logger.debug(
