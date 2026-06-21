@@ -97,6 +97,7 @@ export interface ViolationRecord {
   evidence_path: string
   location?: string
   timestamp: string
+  review_status?: string
 }
 
 export interface ViolationStats {
@@ -209,6 +210,15 @@ export function getEvidenceUrl(filename: string): string {
 
 export function getEvidenceReportUrl(filename: string): string {
   return `/api/evidence/report/${filename}`
+}
+
+export function getUploadUrl(filename: string): string {
+  return `/api/uploads/${filename}`
+}
+
+export async function updateReviewStatus(id: number, status: 'approved' | 'rejected'): Promise<{ success: boolean; review_status: string }> {
+  const { data } = await api.post(`/violations/${id}/review`, null, { params: { status } })
+  return data
 }
 
 // — Intelligence API —

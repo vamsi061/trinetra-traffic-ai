@@ -189,12 +189,15 @@ def check_illegal_parking(detections, image_shape, moving_vehicle_hint=False):
                 reasons.append('vehicle stationary with pedestrian activity at roadside')
 
         if reasons:
+            vtype_label = config.VEHICLE_CLASSES.get(veh['class_id'], 'vehicle')
             violations.append({
                 'violation_type': 'POSSIBLE_ILLEGAL_PARKING',
                 'confidence': 0.45 + (len(reasons) * 0.1),
                 'confidence_band': 'low',
                 'severity_score': 25,
-                'description': 'Possible illegal parking: ' + '; '.join(reasons),
+                'vehicle_bbox': veh['bbox'],
+                'vehicle_type': vtype_label,
+                'description': f'{veh.get("instance_id", vtype_label)} — Possible illegal parking: ' + '; '.join(reasons),
                 'involved_objects': [veh.get('instance_id', 'vehicle')],
                 'needs_review': True,
             })

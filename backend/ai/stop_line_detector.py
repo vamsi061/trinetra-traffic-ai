@@ -72,6 +72,7 @@ def check_stop_line_violation(detections, image):
                 'vehicle_bbox': veh['bbox'],
                 'vehicle_type': vtype,
                 'severity_score': config.RISK_SCORES.get('STOP_LINE_VIOLATION', 60),
+                'stop_line_y': int(stop_line['cy']),
                 'description': f'{veh.get("instance_id", vtype)} crossed stop line',
                 'involved_objects': [veh.get('instance_id', vtype)],
             })

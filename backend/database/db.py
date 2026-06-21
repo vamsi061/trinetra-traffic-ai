@@ -38,6 +38,12 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_vehicle_number
         ON violations(vehicle_number)
     """)
+    # Add review_status column if missing (migration)
+    try:
+        cursor.execute("ALTER TABLE violations ADD COLUMN review_status TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass  # column already exists
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS repeat_offenders (
             vehicle_number TEXT PRIMARY KEY,
@@ -258,6 +264,23 @@ def get_monthly_trend(months=6):
     results = cursor.fetchall()
     conn.close()
     return [{'month': r['month'], 'count': r['count']} for r in results]
+
+
+def get_violation_by_id(violation_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM violations WHERE id=?", (violation_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return ViolationRecord.from_row(row) if row else None
+
+
+def update_violation_review_status(violation_id, review_status):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE violations SET review_status=? WHERE id=?", (review_status, violation_id))
+    conn.commit()
+    conn.close()
 
 
 def get_recent_violations(limit=10):

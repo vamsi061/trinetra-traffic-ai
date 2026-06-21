@@ -65,14 +65,14 @@ def check_red_light_violation(detections, image):
     if not vehicles:
         return violations
 
-    active_red = False
+    red_tl_bbox = None
     for tl in traffic_lights:
         color = detect_traffic_light_color(tl['bbox'], image)
         if color == 'red':
-            active_red = True
+            red_tl_bbox = tl['bbox']
             break
 
-    if not active_red:
+    if red_tl_bbox is None:
         return violations
 
     for veh in vehicles:
@@ -84,6 +84,7 @@ def check_red_light_violation(detections, image):
                 'confidence_band': 'low',
                 'vehicle_bbox': veh['bbox'],
                 'vehicle_type': vtype,
+                'traffic_light_bbox': red_tl_bbox,
                 'severity_score': config.RISK_SCORES.get('RED_LIGHT_VIOLATION', 90),
                 'description': f'{veh.get("instance_id", vtype)} crossed intersection during red light',
                 'involved_objects': [veh.get('instance_id', vtype)],

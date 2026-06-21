@@ -117,7 +117,7 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
     else:
         pdf.set_font('Helvetica', '', 8)
         pdf.set_text_color(0, 0, 0)
-        col_w = [48, 32, 22, 32, 22, 34]
+        col_w = [38, 28, 24, 28, 22, 50]
         pdf.set_fill_color(235, 240, 250)
         with pdf.table(
             col_widths=col_w,
@@ -127,13 +127,20 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
         ) as table:
             hr = table.row()
             hr.cell('Type')
+            hr.cell('Vehicle')
             hr.cell('Confidence')
-            hr.cell('Reliability')
-            hr.cell('Review Status')
+            hr.cell('Review')
             hr.cell('Priority')
             hr.cell('Recommendation')
             for v in violations:
                 vtype = v.get('type', v.get('violation_type', 'Unknown')).replace('_', ' ').title()
+                # Extract vehicle instance from involved_objects or description
+                involved = v.get('involved_objects', [])
+                if involved:
+                    vehicle_str = involved[0].replace('_', ' ').title()
+                else:
+                    desc = v.get('description', '')
+                    vehicle_str = desc.split(' ')[0].replace('_', ' ').title() if desc else '—'
                 raw_conf = v.get('confidence_label', '')
                 if raw_conf in ('HIGH CONFIDENCE',):
                     conf = 'High'
@@ -143,14 +150,13 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
                     conf = 'Low'
                 else:
                     conf = f"{v.get('confidence', 0)*100:.0f}%"
-                rel = v.get('reliability_badge', {}).get('label', 'N/A')
                 review = v.get('human_review_status', 'N/A').replace('_', ' ').title()
                 pri = v.get('officer_priority', 'Medium').title()
                 rec = v.get('enforcement_recommendation', 'N/A')
                 row = table.row()
                 row.cell(vtype)
+                row.cell(vehicle_str)
                 row.cell(conf)
-                row.cell(rel)
                 row.cell(review)
                 row.cell(pri)
                 row.cell(rec)

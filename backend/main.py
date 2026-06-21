@@ -575,6 +575,14 @@ def violation_analytics():
     }
 
 
+@app.get("/api/uploads/{filename}")
+def get_upload(filename: str):
+    filepath = os.path.join(config.UPLOAD_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(404, "Upload not found")
+    return FileResponse(filepath)
+
+
 @app.get("/api/evidence/{filename}")
 def get_evidence(filename: str):
     filepath = os.path.join(config.EVIDENCE_DIR, filename)
@@ -590,6 +598,18 @@ def get_evidence_report(filename: str):
         raise HTTPException(404, "Report not found")
     media = "application/pdf" if filename.endswith('.pdf') else "text/html"
     return FileResponse(filepath, media_type=media)
+
+
+@app.post("/api/violations/{violation_id}/review")
+def review_violation(violation_id: int, status: str = Query(..., description="approved or rejected")):
+    from database.db import get_violation_by_id, update_violation_review_status
+    record = get_violation_by_id(violation_id)
+    if not record:
+        raise HTTPException(404, "Violation not found")
+    if status not in ("approved", "rejected"):
+        raise HTTPException(400, "status must be 'approved' or 'rejected'")
+    update_violation_review_status(violation_id, status)
+    return {"success": True, "review_status": status}
 
 
 # ——————— Vehicle Risk Profile ———————

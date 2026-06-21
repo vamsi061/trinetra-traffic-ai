@@ -113,8 +113,10 @@ def check_wrong_side_violation(detections, image):
             violations.append({
                 'violation_type': 'WRONG_SIDE_DRIVING',
                 'confidence': confidence,
+                'confidence_band': 'medium' if confidence >= 0.6 else 'low',
                 'vehicle_bbox': vehicle['bbox'],
                 'vehicle_type': vtype,
+                'severity_score': config.RISK_SCORES.get('WRONG_SIDE_DRIVING', 85),
                 'description': f'{vehicle.get("instance_id", vtype)} driving on wrong side of road',
                 'involved_objects': [vehicle.get('instance_id', vtype)],
             })
