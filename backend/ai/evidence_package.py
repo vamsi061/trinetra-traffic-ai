@@ -117,7 +117,7 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
     else:
         pdf.set_font('Helvetica', '', 8)
         pdf.set_text_color(0, 0, 0)
-        col_w = [48, 26, 24, 30, 22, 40]
+        col_w = [48, 32, 22, 32, 22, 34]
         pdf.set_fill_color(235, 240, 250)
         with pdf.table(
             col_widths=col_w,
@@ -125,11 +125,24 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
             first_row_as_headings=True,
             line_height=5,
         ) as table:
-            table.headers = ['Type', 'Confidence', 'Reliability',
-                             'Review Status', 'Priority', 'Recommendation']
+            hr = table.row()
+            hr.cell('Type')
+            hr.cell('Confidence')
+            hr.cell('Reliability')
+            hr.cell('Review Status')
+            hr.cell('Priority')
+            hr.cell('Recommendation')
             for v in violations:
                 vtype = v.get('type', v.get('violation_type', 'Unknown')).replace('_', ' ').title()
-                conf = v.get('confidence_label', f"{v.get('confidence', 0)*100:.0f}%")
+                raw_conf = v.get('confidence_label', '')
+                if raw_conf in ('HIGH CONFIDENCE',):
+                    conf = 'High'
+                elif raw_conf in ('MEDIUM CONFIDENCE',):
+                    conf = 'Medium'
+                elif raw_conf in ('LOW CONFIDENCE',):
+                    conf = 'Low'
+                else:
+                    conf = f"{v.get('confidence', 0)*100:.0f}%"
                 rel = v.get('reliability_badge', {}).get('label', 'N/A')
                 review = v.get('human_review_status', 'N/A').replace('_', ' ').title()
                 pri = v.get('officer_priority', 'Medium').title()
