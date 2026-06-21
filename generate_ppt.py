@@ -82,9 +82,9 @@ def add_image_safe(slide, path, left, top, width, height=None):
 def add_decorated_title(slide, title, subtitle=None):
     add_rect(slide, Inches(0), Inches(0), Inches(0.15), Inches(7.5), RED)
     add_rect(slide, Inches(0), Inches(0), Inches(13.333), Inches(0.04), RED)
-    add_text_box(slide, Inches(1.0), Inches(1.2), Inches(11), Inches(0.8), title, font_size=36, bold=True, color=WHITE)
+    add_text_box(slide, Inches(1.0), Inches(1.0), Inches(11), Inches(0.65), title, font_size=32, bold=True, color=WHITE)
     if subtitle:
-        add_text_box(slide, Inches(1.0), Inches(2.0), Inches(11), Inches(0.5), subtitle, font_size=18, color=MUTED)
+        add_text_box(slide, Inches(1.0), Inches(1.75), Inches(11), Inches(0.3), subtitle, font_size=14, color=MUTED)
 
 def add_callout(slide, x, y, text, color=RED):
     shape = add_rounded_rect(slide, x, y, Inches(1.8), Inches(0.3), DARK2, color)
@@ -95,16 +95,25 @@ def add_callout(slide, x, y, text, color=RED):
     tf.paragraphs[0].alignment = PP_ALIGN.CENTER
     return shape
 
-SAMPLE_DIR = '/tmp/opencode/trinetra-ai-v2/backend/tests/samples'
+SAMPLE_DIR = '/tmp/opencode/trinetra-ai-v2/data/uploads'
 EVIDENCE_DIR = '/tmp/opencode/trinetra-ai-v2/data/evidence'
+
+def find_source(sample_base):
+    if not os.path.isdir(SAMPLE_DIR):
+        return None
+    suffix = sample_base if sample_base.startswith('_') else '_' + sample_base
+    for f in os.listdir(SAMPLE_DIR):
+        if f.endswith(suffix):
+            return os.path.join(SAMPLE_DIR, f)
+    return None
 
 def find_evidence(source_name):
     if not os.path.isdir(EVIDENCE_DIR):
         return None
     base = os.path.splitext(source_name)[0]
-    candidates = [f for f in os.listdir(EVIDENCE_DIR) if f.startswith(base)]
-    if candidates:
-        return os.path.join(EVIDENCE_DIR, sorted(candidates)[-1])
+    for f in os.listdir(EVIDENCE_DIR):
+        if base in f:
+            return os.path.join(EVIDENCE_DIR, f)
     return None
 
 # ═══════════════════════════════════════════════════════════════
@@ -141,7 +150,7 @@ lines = [
     '• Be robust to varying light, weather, traffic density, and image quality',
     '• Maintain high accuracy and scalability',
 ]
-add_multi_text(slide, Inches(1.0), Inches(2.4), Inches(11), Inches(4.5), lines, font_size=16)
+add_multi_text(slide, Inches(1.0), Inches(2.3), Inches(11), Inches(4.5), lines, font_size=16)
 
 # ═══════════════════════════════════════════════════════════════
 # SLIDE 3: Solution Overview
@@ -161,7 +170,7 @@ tasks = [
 for i, (title, desc) in enumerate(tasks):
     row = i // 2; col = i % 2
     x = Inches(0.6) + col * Inches(6.3)
-    y = Inches(2.2) + row * Inches(1.3)
+    y = Inches(2.5) + row * Inches(1.3)
     add_rounded_rect(slide, x, y, Inches(5.9), Inches(1.1), DARK2, RED)
     add_text_box(slide, x + Inches(0.2), y + Inches(0.1), Inches(5.5), Inches(0.35), title, font_size=15, bold=True, color=RED)
     add_text_box(slide, x + Inches(0.2), y + Inches(0.5), Inches(5.5), Inches(0.5), desc, font_size=12, color=MUTED)
@@ -183,7 +192,7 @@ features = [
 for i, (title, desc) in enumerate(features):
     col = i % 3; row = i // 3
     x = Inches(0.5) + col * Inches(4.2)
-    y = Inches(2.3) + row * Inches(2.2)
+    y = Inches(2.6) + row * Inches(2.2)
     add_rounded_rect(slide, x, y, Inches(3.9), Inches(1.8), DARK2, BLUE)
     add_rect(slide, x, y, Inches(3.9), Inches(0.04), BLUE)
     add_text_box(slide, x + Inches(0.15), y + Inches(0.15), Inches(3.6), Inches(0.4), title, font_size=15, bold=True, color=BLUE)
@@ -205,7 +214,7 @@ items = [
     'Automatic fallback between engines if one fails',
 ]
 for i, item in enumerate(items):
-    y = Inches(2.3) + i * Inches(0.65)
+    y = Inches(2.6) + i * Inches(0.65)
     add_rounded_rect(slide, Inches(0.8), y, Inches(11.5), Inches(0.55), DARK2 if i % 2 == 0 else DARK, RED)
     add_text_box(slide, Inches(1.0), y + Inches(0.05), Inches(11.2), Inches(0.4), f'  ►  {item}', font_size=14, color=WHITE)
 
@@ -228,7 +237,7 @@ violations = [
 for i, (name, desc, accent) in enumerate(violations):
     col = i % 4; row = i // 4
     x = Inches(0.4) + col * Inches(3.2)
-    y = Inches(2.1) + row * Inches(2.4)
+    y = Inches(2.4) + row * Inches(2.4)
     add_rounded_rect(slide, x, y, Inches(3.0), Inches(2.1), DARK2, accent)
     add_rect(slide, x, y, Inches(3.0), Inches(0.04), accent)
     add_text_box(slide, x + Inches(0.1), y + Inches(0.15), Inches(2.8), Inches(0.35), name, font_size=14, bold=True, color=accent)
@@ -249,7 +258,7 @@ caps = [
 for i, (title, desc) in enumerate(caps):
     col = i % 2; row = i // 2
     x = Inches(0.6) + col * Inches(6.3)
-    y = Inches(2.2) + row * Inches(2.4)
+    y = Inches(2.5) + row * Inches(2.4)
     add_rounded_rect(slide, x, y, Inches(5.9), Inches(2.1), DARK2, RED)
     add_text_box(slide, x + Inches(0.2), y + Inches(0.1), Inches(5.5), Inches(0.4), title, font_size=16, bold=True, color=WHITE)
     add_text_box(slide, x + Inches(0.2), y + Inches(0.55), Inches(5.5), Inches(1.4), desc, font_size=12, color=MUTED)
@@ -288,7 +297,7 @@ ev_features = [
 for i, (title, desc) in enumerate(ev_features):
     col = i % 2; row = i // 2
     x = Inches(0.6) + col * Inches(6.3)
-    y = Inches(2.2) + row * Inches(2.4)
+    y = Inches(2.5) + row * Inches(2.4)
     add_rounded_rect(slide, x, y, Inches(5.9), Inches(2.1), DARK2, RED)
     add_text_box(slide, x + Inches(0.2), y + Inches(0.1), Inches(5.5), Inches(0.4), title, font_size=16, bold=True, color=WHITE)
     add_text_box(slide, x + Inches(0.2), y + Inches(0.55), Inches(5.5), Inches(1.4), desc, font_size=12, color=MUTED)
@@ -310,7 +319,7 @@ analytics = [
 for i, (title, desc) in enumerate(analytics):
     col = i % 3; row = i // 3
     x = Inches(0.4) + col * Inches(4.2)
-    y = Inches(2.1) + row * Inches(2.5)
+    y = Inches(2.4) + row * Inches(2.5)
     add_rounded_rect(slide, x, y, Inches(3.9), Inches(2.2), DARK2, BLUE)
     add_rounded_rect(slide, x + Inches(0.1), y + Inches(0.1), Inches(3.7), Inches(0.4), DARK2, RED)
     add_text_box(slide, x + Inches(0.15), y + Inches(0.15), Inches(3.6), Inches(0.3), title, font_size=13, bold=True, color=WHITE)
@@ -337,7 +346,7 @@ steps = [
 for i, (num, title, sub) in enumerate(steps):
     row = i // 2; col = i % 2
     x = Inches(0.6) + col * Inches(6.3)
-    y = Inches(2.2) + row * Inches(0.95)
+    y = Inches(2.5) + row * Inches(0.95)
     add_rounded_rect(slide, x, y, Inches(5.9), Inches(0.75), DARK2, RED)
     add_text_box(slide, x + Inches(0.15), y + Inches(0.12), Inches(0.5), Inches(0.4), num, font_size=16, bold=True, color=RED)
     add_text_box(slide, x + Inches(0.6), y + Inches(0.05), Inches(3.0), Inches(0.35), title, font_size=14, bold=True, color=WHITE)
@@ -357,26 +366,26 @@ for vi, (vname, sample, desc, accent) in enumerate(showcase):
     add_bg(slide)
     add_decorated_title(slide, f'Violation Showcase: {vname}', 'Input Image → AI Analysis with annotated evidence')
 
-    src_path = os.path.join(SAMPLE_DIR, sample)
-    img_added = add_image_safe(slide, src_path, Inches(0.5), Inches(2.2), Inches(5.8), Inches(4.5))
+    src_path = find_source(sample)
+    img_added = add_image_safe(slide, src_path, Inches(0.5), Inches(2.4), Inches(5.8), Inches(4.4))
     if not img_added:
-        add_rounded_rect(slide, Inches(0.5), Inches(2.2), Inches(5.8), Inches(4.5), DARK2, MUTED)
+        add_rounded_rect(slide, Inches(0.5), Inches(2.4), Inches(5.8), Inches(4.4), DARK2, MUTED)
         add_text_box(slide, Inches(0.5), Inches(3.5), Inches(5.8), Inches(1.0), '[ Source Image ]', font_size=16, color=MUTED, align=PP_ALIGN.CENTER)
     add_callout(slide, Inches(0.5), Inches(6.8), 'Input Image', RED)
 
     ev_path = find_evidence(sample)
-    img_added2 = add_image_safe(slide, ev_path, Inches(6.8), Inches(2.2), Inches(5.8), Inches(4.5)) if ev_path else False
+    img_added2 = add_image_safe(slide, ev_path, Inches(6.8), Inches(2.4), Inches(5.8), Inches(4.4)) if ev_path else False
     if not img_added2:
-        add_rounded_rect(slide, Inches(6.8), Inches(2.2), Inches(5.8), Inches(4.5), DARK2, GREEN)
+        add_rounded_rect(slide, Inches(6.8), Inches(2.4), Inches(5.8), Inches(4.4), DARK2, GREEN)
         add_text_box(slide, Inches(6.8), Inches(3.5), Inches(5.8), Inches(1.0),
             '[ AI Evidence Image ]\nAnnotated with callouts, confidence\nscores, and violation legend.',
             font_size=11, color=MUTED, align=PP_ALIGN.CENTER)
     add_callout(slide, Inches(6.8), Inches(6.8), 'AI Evidence', GREEN)
 
-    add_rounded_rect(slide, Inches(8.5), Inches(2.3), Inches(3.8), Inches(1.4), DARK2, accent)
+    add_rounded_rect(slide, Inches(8.5), Inches(2.5), Inches(3.8), Inches(1.4), DARK2, accent)
     lines = desc.split('\n')
     for i, line in enumerate(lines):
-        add_text_box(slide, Inches(8.6), Inches(2.35) + i * Inches(0.35), Inches(3.6), Inches(0.3),
+        add_text_box(slide, Inches(8.6), Inches(2.55) + i * Inches(0.35), Inches(3.6), Inches(0.3),
             line, font_size=10, color=WHITE if i == 0 else MUTED, bold=(i == 0))
 
     features = [
@@ -431,7 +440,7 @@ uis = [
 for i, (title, desc) in enumerate(uis):
     col = i % 2; row = i // 2
     x = Inches(0.6) + col * Inches(6.3)
-    y = Inches(2.2) + row * Inches(2.4)
+    y = Inches(2.5) + row * Inches(2.4)
     add_rounded_rect(slide, x, y, Inches(5.9), Inches(2.1), DARK2, BLUE)
     add_rounded_rect(slide, x + Inches(0.1), y + Inches(0.1), Inches(5.7), Inches(0.4), DARK2, RED)
     add_text_box(slide, x + Inches(0.15), y + Inches(0.15), Inches(5.6), Inches(0.3), title, font_size=15, bold=True, color=WHITE)
@@ -450,7 +459,7 @@ engines_data = [
     ('Gradio Cloud GPU', 'NVIDIA HF space', 'Zero-shot via cloud GPU\nFallback if GPU quota allows', AMBER),
 ]
 for i, (name, req, desc, accent) in enumerate(engines_data):
-    y = Inches(2.2) + i * Inches(1.2)
+    y = Inches(2.5) + i * Inches(1.2)
     add_rounded_rect(slide, Inches(0.8), y, Inches(5.8), Inches(1.0), DARK2, accent)
     add_text_box(slide, Inches(1.0), y + Inches(0.05), Inches(5.4), Inches(0.3), name, font_size=15, bold=True, color=accent)
     add_text_box(slide, Inches(1.0), y + Inches(0.35), Inches(5.4), Inches(0.25), req, font_size=11, color=MUTED)
@@ -477,7 +486,7 @@ items = [
     'Configurable Thresholds: Per-violation confidence thresholds tunable without code changes',
 ]
 for i, item in enumerate(items):
-    y = Inches(2.3) + i * Inches(0.78)
+    y = Inches(2.6) + i * Inches(0.78)
     add_rounded_rect(slide, Inches(0.8), y, Inches(11.5), Inches(0.65), DARK2 if i % 2 == 0 else DARK, GREEN)
     add_text_box(slide, Inches(1.0), y + Inches(0.08), Inches(11.2), Inches(0.5), f'  ►  {item}', font_size=13, color=WHITE)
 
@@ -497,7 +506,7 @@ outcomes = [
     ('Scalable Deployment', 'Serverless API design ready for integration with existing camera infrastructure'),
 ]
 for i, (title, desc) in enumerate(outcomes):
-    y = Inches(2.2) + i * Inches(0.65)
+    y = Inches(2.5) + i * Inches(0.65)
     bg = DARK if i % 2 == 0 else DARK2
     add_rounded_rect(slide, Inches(0.8), y, Inches(3.5), Inches(0.55), bg, RED)
     add_text_box(slide, Inches(0.9), y + Inches(0.08), Inches(3.3), Inches(0.4), title, font_size=14, bold=True, color=WHITE)
