@@ -382,7 +382,63 @@ class LocateAnythingDetector:
 
     # ────────── Tier 4: Gradio API (LocateAnything HF spaces) ──────────
 
+    def _detect_gradio_client(self, image: np.ndarray, categories: str) -> list:
+        """Use gradio_client library (more reliable than raw REST API)."""
+        try:
+            import gradio_client
+            from gradio_client import file as gc_file
+            HAS_GRADIO_CLIENT = True
+        except ImportError:
+            logger.debug("Gradio client: gradio_client not installed")
+            return []
+
+        try:
+            _, img_buf = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            img_bytes = img_buf.tobytes()
+
+            for space in LOCATE_ANYTHING_SPACES:
+                hf_space = f"https://huggingface.co/spaces/{space}"
+                try:
+                    client = gradio_client.Client(space, hf_token=True, timeout=60)
+
+                    # Use the v2 API endpoint with the right parameters
+                    result = client.predict(
+                        "Image",                  # input_type
+                        gc_file(img_bytes),       # image_file
+                        None,                     # video_file
+                        "Detection",              # task_type
+                        categories,               # category
+                        "fast",                   # model_mode
+                        0.7,                      # temp
+                        0.9,                      # top_p
+                        10,                       # top_k
+                        640,                      # short_size
+                        None,                     # question_override
+                        1,                        # max_video_frames
+                        api_name="/v2/run_inference",
+                    )
+
+                    if result and isinstance(result, (list, tuple)) and len(result) > 2:
+                        meta = result[2] if isinstance(result[2], dict) else {}
+                        if isinstance(meta, dict) and meta.get('success') and 'detections' in meta:
+                            dets = self._format_gradio_detections(meta['detections'], image.shape)
+                            if dets:
+                                self._active_mode = f'locateanything_api_{space.split("/")[-1]}'
+                                logger.info(f"Gradio client {space}: {len(dets)} detections")
+                                return dets
+
+                except Exception as e:
+                    logger.debug(f"Gradio client {space}: {e}")
+                    continue
+
+            return []
+
+        except Exception as e:
+            logger.debug(f"Gradio client failed: {e}")
+            return []
+
     def _detect_gradio_rest(self, image: np.ndarray, categories: str) -> list:
+        """Fallback REST API call if gradio_client fails."""
         if self._gradio_failed:
             return []
 
@@ -393,20 +449,12 @@ class LocateAnythingDetector:
             for space in LOCATE_ANYTHING_SPACES:
                 space_domain = f"https://{space.replace('/', '-')}.hf.space"
                 try:
-                    try:
-                        hc = requests.get(f"{space_domain}/", timeout=5)
-                        if hc.status_code != 200:
-                            continue
-                    except requests.exceptions.Timeout:
-                        continue
-
                     upload_resp = requests.post(
                         f"{space_domain}/gradio_api/upload",
                         files={"files": ("image.jpg", img_bytes, "image/jpeg")},
-                        timeout=15,
+                        timeout=10,
                     )
                     if upload_resp.status_code != 200:
-                        logger.debug(f"Gradio upload failed for {space}: {upload_resp.status_code}")
                         continue
 
                     file_path = upload_resp.json()[0]
@@ -429,7 +477,7 @@ class LocateAnythingDetector:
                     event_resp = requests.post(
                         f"{space_domain}/gradio_api/call/v2/run_inference",
                         json=payload,
-                        timeout=30,
+                        timeout=20,
                     )
                     if event_resp.status_code != 200:
                         continue
@@ -438,10 +486,10 @@ class LocateAnythingDetector:
                     if not event_id:
                         continue
 
-                    for _ in range(15):
+                    for _ in range(10):
                         poll_resp = requests.get(
                             f"{space_domain}/gradio_api/call/run_inference/{event_id}",
-                            timeout=10,
+                            timeout=8,
                         )
                         body = poll_resp.text
                         if 'event: complete' in body:
@@ -463,13 +511,8 @@ class LocateAnythingDetector:
                         elif 'event: error' in body:
                             logger.debug(f"Gradio {space}: event error")
                             break
-                        time.sleep(1.5)
-
-                except requests.exceptions.Timeout:
-                    logger.debug(f"Gradio {space}: timed out")
-                    continue
-                except Exception as e:
-                    logger.debug(f"Gradio {space}: {e}")
+                        time.sleep(1.0)
+                except Exception:
                     continue
 
             self._gradio_failed = True
@@ -544,6 +587,10 @@ class LocateAnythingDetector:
             return dets
 
         elif engine == ENGINE_GRADIO:
+            self._gradio_failed = False  # reset so each request gets a fresh try
+            dets = self._detect_gradio_client(image, cats)
+            if dets:
+                return dets
             dets = self._detect_gradio_rest(image, cats)
             if dets:
                 return dets

@@ -239,6 +239,27 @@ export async function downloadOwlvitModel(): Promise<OwlVitDownloadResult> {
   return data
 }
 
+export interface DetectStatus {
+  active_mode: string
+  hf_token_set: boolean
+  owlvit_ready: boolean
+  owlvit_can_run: boolean
+  gradio_available: boolean
+  yolo_available: boolean
+}
+
+export async function getDetectStatus(): Promise<DetectStatus> {
+  const { data } = await api.get('/detect/status')
+  return data
+}
+
+export async function setHfToken(hfToken: string): Promise<{ success: boolean; token_set: boolean }> {
+  const form = new FormData()
+  form.append('hf_token', hfToken)
+  const { data } = await api.post('/detect/set-hf-token', form)
+  return data
+}
+
 export async function getViolations(params?: {
   vehicle_number?: string
   violation_type?: string

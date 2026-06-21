@@ -238,6 +238,30 @@ def list_engines():
     return {'engines': detector.get_available_engines()}
 
 
+@app.get("/api/detect/status")
+def detect_status():
+    """Return current detection engine configuration status."""
+    detector = LocateAnythingDetector()
+    info = detector.get_model_info()
+    compat = check_owlvit_compatibility()
+    return {
+        'active_mode': info.get('active_mode', 'not_initialized'),
+        'hf_token_set': bool(detector._hf_token),
+        'owlvit_ready': detector._owl_pipeline is not None,
+        'owlvit_can_run': compat.get('can_run', False),
+        'gradio_available': not detector._gradio_failed,
+        'yolo_available': True,
+    }
+
+
+@app.post("/api/detect/set-hf-token")
+async def set_hf_token_endpoint(hf_token: str = Form(...)):
+    """Set the HuggingFace token for LocateAnything detection."""
+    detector = LocateAnythingDetector()
+    detector.set_hf_token(hf_token)
+    return {'success': True, 'token_set': True}
+
+
 @app.get("/api/detect/owlvit-compatibility")
 def owlvit_compat():
     """Check if local OwlViT can run on this machine."""
