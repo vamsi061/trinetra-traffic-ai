@@ -475,9 +475,12 @@ export default function Upload() {
               }`}>
                 {result.detection_model.engine_label || result.detection_model.active_mode}
               </span>
-              {result.helmet_model?.model_name && (
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1a2040] text-trinetra-muted border border-trinetra-border">
-                  {result.helmet_model.model_name}
+              {result.helmet_model && (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1a2040] text-trinetra-muted border border-trinetra-border flex items-center gap-1">
+                  Helmet: {result.helmet_model.loaded ? result.helmet_model.model_name : 'HSV fallback'}
+                  {result.helmet_model.beta && (
+                    <span className="text-[9px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 font-bold">BETA</span>
+                  )}
                 </span>
               )}
             </div>
@@ -806,9 +809,12 @@ export default function Upload() {
                 }`}>
                   {result.detection_model.engine_label || result.detection_model.active_mode}
                 </span>
-                {result.helmet_model?.model_name && (
-                  <span className="text-xs font-mono px-2 py-1 rounded-full bg-[#1a2040] text-trinetra-muted border border-trinetra-border">
-                    Helmet: {result.helmet_model.model_name}
+                {result.helmet_model && (
+                  <span className="text-xs font-mono px-2 py-1 rounded-full bg-[#1a2040] text-trinetra-muted border border-trinetra-border flex items-center gap-1">
+                    Helmet: {result.helmet_model.loaded ? result.helmet_model.model_name : 'HSV fallback'}
+                    {result.helmet_model.beta && (
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-yellow-500/20 text-yellow-300 font-bold">BETA</span>
+                    )}
                   </span>
                 )}
               </div>

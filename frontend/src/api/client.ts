@@ -109,7 +109,7 @@ export interface DetectResponse {
     yolo_available: boolean
     gradio_available: boolean
   }
-  helmet_model?: { loaded: boolean; model_name: string; classes: Record<number, string> }
+  helmet_model?: { loaded: boolean; model_name: string; beta?: boolean; classes: Record<number, string> }
   helmet_non_compliance_count?: number
   ai_review_recommended?: boolean
   operational_intelligence?: OperationalIntelligence

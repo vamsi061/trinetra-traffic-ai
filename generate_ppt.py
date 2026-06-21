@@ -161,7 +161,7 @@ add_decorated_title(slide, 'Our Solution — TRINETRA AI', 'A complete computer-
 tasks = [
     ('Image Preprocessing', 'Quality assessment, enhancement for low-light, rain, shadows, blur'),
     ('Vehicle & Road User Detection', 'YOLOv8s: vehicles, motorcycles, persons, buses, trucks, auto-rickshaws'),
-    ('Traffic Violation Detection', '7 violation types: Helmet, Triple Riding, Overloading, Seatbelt, Wrong Side, Red Light, Stop Line'),
+    ('Traffic Violation Detection', '7 violation types: Helmet (Beta), Triple Riding, Overloading, Seatbelt, Wrong Side, Red Light, Stop Line'),
     ('Violation Classification', 'Categorize violations with confidence scores and severity bands'),
     ('License Plate Recognition', 'OCR-based number plate detection and text extraction'),
     ('Evidence Generation', 'Annotated images with callouts, legend, confidence scores'),
@@ -225,7 +225,7 @@ slide = prs.slides.add_slide(prs.slide_layouts[6])
 add_bg(slide)
 add_decorated_title(slide, 'Traffic Violation Detection', '7 violation types detected with confidence scoring & classification')
 violations = [
-    ('No Helmet', 'Motorcycle riders without helmets.\nYOLO helmet classifier + color analysis.\nConfidence range: 80-98%', RED),
+    ('No Helmet [BETA]', 'Motorcycle riders without helmets.\nYOLO helmet classifier (Beta) + HSV fallback.\nConfidence range: 50-90%', RED),
     ('Triple Riding', '3+ riders per motorcycle via\ndistance-based rider association.\nConfidence range: 75-85%', AMBER),
     ('Overloading', '4-5 = Overloading, 10-12 = Extreme.\nExcessive occupant classification.\nConfidence range: 95-98%', ORANGE),
     ('Seatbelt Violation', 'Car driver without seatbelt.\nAuto-rickshaw FP filter by size.\nConfidence range: 30-60%', PURPLE),
@@ -356,7 +356,7 @@ for i, (num, title, sub) in enumerate(steps):
 # SLIDE 12: Violation Showcase (4 key violations)
 # ═══════════════════════════════════════════════════════════════
 showcase = [
-    ('No Helmet Detection', 'HELMET_MISSING_001.png', 'Motorcycle rider without helmet.\nConfidence: 87% | Risk: 30', RED),
+    ('No Helmet Detection [BETA]', 'HELMET_MISSING_001.png', 'Motorcycle rider without helmet.\nConfidence: 87% | Risk: 30 | Beta', RED),
     ('Triple Riding Detection', 'TRIPLE_RIDING_001.jpeg', '3 riders on one motorcycle.\nConfidence: 89% | Risk: 75', AMBER),
     ('Motorcycle Overloading', 'OVERLOADING_001.jpg', '4+ occupants on motorcycle.\nConfidence: 95% | Risk: 95', ORANGE),
     ('Wrong-Side Driving', 'HELMET_MISSING_002.png', 'Vehicle on wrong road side.\nConfidence: 85% | Risk: 85', PURPLE),

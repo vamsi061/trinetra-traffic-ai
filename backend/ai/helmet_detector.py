@@ -83,6 +83,7 @@ class HelmetDetectorService:
         return {
             'loaded': self._model_loaded,
             'model_name': self._model_name,
+            'beta': True,
             'classes': {0: 'With Helmet', 1: 'Without Helmet'} if self._model_loaded else {},
         }
 
