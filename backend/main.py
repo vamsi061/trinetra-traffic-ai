@@ -298,10 +298,12 @@ async def detect_violations(
     processed = enhance_image(image)
     detector = LocateAnythingDetector()
 
+    # Run detection on original image — enhance_image is too aggressive
+    # and degrades YOLO confidence. Enhanced image used later for evidence.
     if detection_engine == 'auto':
-        raw_detections = detector.detect(processed)
+        raw_detections = detector.detect(image)
     else:
-        raw_detections = detector.detect_with_engine(processed, detection_engine, hf_token=hf_token)
+        raw_detections = detector.detect_with_engine(image, detection_engine, hf_token=hf_token)
 
     # Filter low-confidence vehicles
     filtered = []
