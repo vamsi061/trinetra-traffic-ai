@@ -564,36 +564,35 @@ class LocateAnythingDetector:
         """Run detection with a specific engine."""
         cats = categories or DEFAULT_CATEGORIES
 
-        # Set token if provided
         if hf_token:
             self._hf_token = hf_token
 
         if engine == ENGINE_HF_INFERENCE:
             dets = self._detect_hf_inference(image, cats)
-            if dets:
-                self._active_mode = 'hf_inference_api_owlvit'
+            self._active_mode = 'hf_inference_api_owlvit' if dets else f'{engine}_no_results'
             return dets
 
         elif engine == ENGINE_YOLO:
             dets = self._detect_yolo(image)
-            if dets:
-                self._active_mode = 'yolo'
+            self._active_mode = 'yolo' if dets else f'{engine}_no_results'
             return dets
 
         elif engine == ENGINE_OWLVIT_LOCAL:
             dets = self._detect_owlvit(image, cats)
-            if dets:
-                self._active_mode = 'owlvit_local'
+            self._active_mode = 'owlvit_local' if dets else f'{engine}_no_results'
             return dets
 
         elif engine == ENGINE_GRADIO:
-            self._gradio_failed = False  # reset so each request gets a fresh try
+            self._gradio_failed = False
             dets = self._detect_gradio_client(image, cats)
             if dets:
+                self._active_mode = 'locateanything_gradio_client'
                 return dets
             dets = self._detect_gradio_rest(image, cats)
             if dets:
+                self._active_mode = 'locateanything_gradio_rest'
                 return dets
+            self._active_mode = 'locateanything_gradio_no_results'
             return []
 
         else:
