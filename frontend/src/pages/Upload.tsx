@@ -237,22 +237,20 @@ function DetectionEngineSelector({
               <span className="text-yellow-500 text-[11px]">Required — set in sidebar Engine Configuration</span>
             )}
           </label>
-          {engine?.token_set ? (
-            <p className="text-[11px] text-trinetra-muted">
-              Token is already stored on the server. Enter a different token below to override for this request.
-            </p>
-          ) : (
+          {engine?.token_set ? null : (
             <p className="text-[11px] text-red-400 mb-2">
               No token configured. Go to the <strong>Engine Configuration</strong> in the sidebar to set one, or enter below for this request only.
             </p>
           )}
-          <input
-            type="password"
-            value={hfToken}
-            onChange={e => onHfTokenChange(e.target.value)}
-            placeholder={engine?.token_set ? 'Override token (optional)' : 'hf_...'}
-            className="w-full px-3 py-2 rounded-lg bg-[#1a2040] border border-trinetra-border text-white text-sm placeholder-trinetra-muted/50 focus:outline-none focus:border-red-500/50"
-          />
+          {!engine?.token_set && (
+            <input
+              type="password"
+              value={hfToken}
+              onChange={e => onHfTokenChange(e.target.value)}
+              placeholder="hf_..."
+              className="w-full px-3 py-2 rounded-lg bg-[#1a2040] border border-trinetra-border text-white text-sm placeholder-trinetra-muted/50 focus:outline-none focus:border-red-500/50"
+            />
+          )}
           <p className="text-[10px] text-trinetra-muted mt-1">
             Get a free token at{' '}
             <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer"
