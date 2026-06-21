@@ -7,6 +7,7 @@ Rules:
 """
 
 import logging
+import config
 logger = logging.getLogger(__name__)
 
 
