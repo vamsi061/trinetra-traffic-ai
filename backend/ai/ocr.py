@@ -98,7 +98,7 @@ class LicensePlateReader:
             if len(cleaned) < 2:
                 continue
             xs = [p[0] for p in bbox]
-            cx = sum(xs) / len(xs)
+            cx = min(xs)  # left edge — more reliable for LTR sorting
             filtered.append({'text': cleaned, 'conf': conf, 'cx': cx})
 
         if not filtered:
@@ -168,11 +168,15 @@ class LicensePlateReader:
 
             for name, proc in methods:
                 text, conf = self._run_easyocr(proc)
-                if text and conf > best_conf:
-                    best_text, best_conf = text, conf
-                # Prefer longer text (more complete plate)
-                if text and len(text) >= len(best_text) and conf >= best_conf - 0.1:
-                    best_text, best_conf = text, max(best_conf, conf)
+                # Prefer longer text (more complete plate), but only if strictly longer
+                # or if same length with strictly higher confidence
+                if text:
+                    if len(text) > len(best_text) and conf >= best_conf - 0.1:
+                        best_text, best_conf = text, max(best_conf, conf)
+                    elif len(text) == len(best_text) and conf > best_conf:
+                        best_text, best_conf = text, conf
+                    elif not best_text:
+                        best_text, best_conf = text, conf
                 if best_text and len(best_text) >= 8 and best_conf >= 0.4:
                     return best_text, best_conf
 
