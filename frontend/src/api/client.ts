@@ -60,6 +60,34 @@ export interface OperationalIntelligence {
   note: string
 }
 
+export interface DetectionEngine {
+  id: string
+  label: string
+  available: boolean
+  needs_token?: boolean
+  token_set?: boolean
+  needs_download?: boolean
+}
+
+export interface OwlVitCompat {
+  transformers_installed: boolean
+  torch_installed: boolean
+  cuda_available: boolean
+  device: string
+  estimated_ram_mb: number
+  can_run: boolean
+  gpu_name: string
+  download_size_mb: number
+  message: string
+}
+
+export interface OwlVitDownloadResult {
+  success: boolean
+  message: string
+  model_path: string
+  model_size_mb: number
+}
+
 export interface DetectResponse {
   success: boolean
   detections: Detection[]
@@ -72,7 +100,15 @@ export interface DetectResponse {
   crowded_scene?: boolean
   compliance_status?: string
   compliance_reason?: string
-  detection_model?: { active_mode: string; gradio_available: boolean; owlvit_available: boolean; yolo_available: boolean; gradio_clients: number }
+  detection_model?: {
+    active_mode: string
+    engine_label?: string
+    selected_engine?: string
+    hf_inference_available: boolean
+    owlvit_local_available: boolean
+    yolo_available: boolean
+    gradio_available: boolean
+  }
   helmet_model?: { loaded: boolean; model_name: string; classes: Record<number, string> }
   helmet_non_compliance_count?: number
   ai_review_recommended?: boolean
@@ -171,10 +207,35 @@ export interface EnforcementDashboard {
 }
 
 // API functions
-export async function uploadImage(file: File): Promise<DetectResponse> {
+export async function uploadImage(
+  file: File,
+  detectionEngine?: string,
+  hfToken?: string,
+): Promise<DetectResponse> {
   const form = new FormData()
   form.append('file', file)
+  if (detectionEngine && detectionEngine !== 'auto') {
+    form.append('detection_engine', detectionEngine)
+  }
+  if (hfToken) {
+    form.append('hf_token', hfToken)
+  }
   const { data } = await api.post<DetectResponse>('/detect', form)
+  return data
+}
+
+export async function getDetectionEngines(): Promise<{ engines: DetectionEngine[] }> {
+  const { data } = await api.get('/detect/engines')
+  return data
+}
+
+export async function checkOwlvitCompat(): Promise<OwlVitCompat> {
+  const { data } = await api.get('/detect/owlvit-compatibility')
+  return data
+}
+
+export async function downloadOwlvitModel(): Promise<OwlVitDownloadResult> {
+  const { data } = await api.post('/detect/download-owlvit')
   return data
 }
 

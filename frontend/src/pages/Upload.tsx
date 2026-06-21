@@ -1,8 +1,8 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload as UploadIcon, AlertTriangle, CheckCircle, Search, Users, Shield, FileText, Eye, ThumbsUp, Bug, ChevronDown, ChevronUp, BarChart3, Activity, Presentation, Download } from 'lucide-react'
-import { uploadImage, getEvidenceUrl, getEvidenceReportUrl } from '../api/client'
-import type { DetectResponse, ReliabilityBadge } from '../api/client'
+import { Upload as UploadIcon, AlertTriangle, CheckCircle, Search, Users, Shield, FileText, Eye, ThumbsUp, Bug, ChevronDown, ChevronUp, BarChart3, Activity, Presentation, Download, Cpu, Loader2 } from 'lucide-react'
+import { uploadImage, getEvidenceUrl, getEvidenceReportUrl, getDetectionEngines, checkOwlvitCompat, downloadOwlvitModel } from '../api/client'
+import type { DetectResponse, ReliabilityBadge, DetectionEngine, OwlVitCompat, OwlVitDownloadResult } from '../api/client'
 
 function ConfidenceBadge({ band, label }: { band: string; label: string }) {
   const colors: Record<string, string> = {
@@ -69,7 +69,6 @@ function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
   const helmetCount = result.violations.filter(v => v.type === 'NO_HELMET').length
   const compliant = result.compliance_status === 'COMPLIANT'
 
-  // Compute reliability from results
   const avgConf = result.violations.length > 0
     ? result.violations.reduce((s, v) => s + v.confidence, 0) / result.violations.length
     : (result.detections.length > 0 ? result.detections.reduce((s, d) => s + d.confidence, 0) / result.detections.length : 0)
@@ -153,6 +152,191 @@ function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
   )
 }
 
+function DetectionEngineSelector({
+  engines,
+  selectedEngine,
+  onEngineChange,
+  hfToken,
+  onHfTokenChange,
+  owlvitCompat,
+  owlvitDownloading,
+  owlvitDownloadResult,
+  onDownloadOwlvit,
+  onAnalyze,
+  loading,
+  hasFile,
+}: {
+  engines: DetectionEngine[]
+  selectedEngine: string
+  onEngineChange: (id: string) => void
+  hfToken: string
+  onHfTokenChange: (token: string) => void
+  owlvitCompat: OwlVitCompat | null
+  owlvitDownloading: boolean
+  owlvitDownloadResult: OwlVitDownloadResult | null
+  onDownloadOwlvit: () => void
+  onAnalyze: () => void
+  loading: boolean
+  hasFile: boolean
+}) {
+  const engine = engines.find(e => e.id === selectedEngine)
+
+  return (
+    <div className="glass rounded-xl p-6 mt-6">
+      <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+        <Cpu className="w-4 h-4" /> Detection Engine
+      </h3>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {engines.map(e => {
+          const isSelected = selectedEngine === e.id
+          return (
+            <button
+              key={e.id}
+              onClick={() => onEngineChange(e.id)}
+              disabled={!e.available && !isSelected}
+              className={`text-left p-3 rounded-lg border transition-all ${
+                isSelected
+                  ? 'border-red-500/50 bg-red-500/10'
+                  : e.available
+                    ? 'border-trinetra-border bg-[#1a2040] hover:border-red-500/30'
+                    : 'border-trinetra-border bg-[#1a2040]/50 opacity-50 cursor-not-allowed'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`w-2 h-2 rounded-full ${
+                  isSelected ? 'bg-red-400' : e.available ? 'bg-green-400' : 'bg-gray-500'
+                }`} />
+                <span className="text-sm font-medium text-white">{e.id}</span>
+              </div>
+              <p className="text-[10px] text-trinetra-muted leading-tight">{e.label}</p>
+              {!e.available && (
+                <p className="text-[10px] text-yellow-500 mt-1">
+                  {e.needs_token ? 'Token not set' : e.needs_download ? 'Model not downloaded' : 'Unavailable'}
+                </p>
+              )}
+              {e.available && (
+                <p className="text-[10px] text-green-500 mt-1">Ready</p>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Conditional: HF token input for LocateAnything */}
+      {selectedEngine === 'locateanything' && (
+        <div className="mb-4 p-4 rounded-lg bg-[#0d1225] border border-trinetra-border">
+          <label className="block text-xs font-medium text-trinetra-muted mb-2">
+            HuggingFace API Token <span className="text-red-400">*</span>
+          </label>
+          <input
+            type="password"
+            value={hfToken}
+            onChange={e => onHfTokenChange(e.target.value)}
+            placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            className="w-full px-3 py-2 rounded-lg bg-[#1a2040] border border-trinetra-border text-white text-sm placeholder-trinetra-muted/50 focus:outline-none focus:border-red-500/50"
+          />
+          <p className="text-[10px] text-trinetra-muted mt-1">
+            Get your free token at{' '}
+            <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer"
+               className="text-blue-400 underline">huggingface.co/settings/tokens</a>
+          </p>
+          <p className="text-[10px] text-yellow-500 mt-1">
+            The token is sent with this request only and is not stored.
+          </p>
+        </div>
+      )}
+
+      {/* Conditional: OwlViT local download */}
+      {selectedEngine === 'owlvit_local' && (
+        <div className="mb-4 p-4 rounded-lg bg-[#0d1225] border border-trinetra-border">
+          <h4 className="text-xs font-medium text-trinetra-muted mb-2">Compatibility Check</h4>
+
+          {owlvitCompat ? (
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${owlvitCompat.torch_installed ? 'bg-green-400' : 'bg-red-400'}`} />
+                <span>PyTorch: {owlvitCompat.torch_installed ? 'Installed' : 'Missing'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${owlvitCompat.transformers_installed ? 'bg-green-400' : 'bg-red-400'}`} />
+                <span>Transformers: {owlvitCompat.transformers_installed ? 'Installed' : 'Missing'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${owlvitCompat.cuda_available ? 'bg-green-400' : 'bg-yellow-400'}`} />
+                <span>GPU: {owlvitCompat.cuda_available ? owlvitCompat.gpu_name : 'Not available (CPU mode)'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-blue-400" />
+                <span>RAM: {(owlvitCompat.estimated_ram_mb / 1024).toFixed(1)}GB | Download: ~{owlvitCompat.download_size_mb}MB</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${owlvitCompat.can_run ? 'bg-green-400' : 'bg-red-400'}`} />
+                <span>Can run: {owlvitCompat.can_run ? 'Yes' : 'No'}</span>
+              </div>
+              <p className="text-trinetra-muted mt-2">{owlvitCompat.message}</p>
+
+              {!owlvitCompat.transformers_installed && (
+                <p className="text-yellow-500 mt-2">
+                  Install transformers: <code className="bg-[#1a2040] px-1 rounded">pip install transformers</code>
+                </p>
+              )}
+
+              {owlvitCompat.can_run && (
+                <div className="mt-3">
+                  <button
+                    onClick={onDownloadOwlvit}
+                    disabled={owlvitDownloading}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/20 transition-colors text-sm disabled:opacity-50"
+                  >
+                    {owlvitDownloading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4" />
+                    )}
+                    {owlvitDownloading ? 'Downloading...' : `Download OwlViT Model (~${owlvitCompat.download_size_mb}MB)`}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-trinetra-muted">Loading compatibility info...</p>
+          )}
+
+          {owlvitDownloadResult && (
+            <div className={`mt-3 p-3 rounded-lg text-xs ${
+              owlvitDownloadResult.success
+                ? 'bg-green-500/10 text-green-300 border border-green-500/30'
+                : 'bg-red-500/10 text-red-300 border border-red-500/30'
+            }`}>
+              {owlvitDownloadResult.message}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Analyze button */}
+      {hasFile && (
+        <button
+          onClick={onAnalyze}
+          disabled={loading || (selectedEngine === 'locateanything' && !hfToken)}
+          className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-red-500/10 text-red-300 border border-red-500/30 rounded-xl hover:bg-red-500/20 transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Activity className="w-4 h-4" />
+          )}
+          {loading
+            ? `Analyzing with ${selectedEngine === 'auto' ? 'best engine' : selectedEngine}...`
+            : `Analyze with ${selectedEngine === 'auto' ? 'Auto (best engine)' : selectedEngine}`
+          }
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function Upload() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<DetectResponse | null>(null)
@@ -161,15 +345,42 @@ export default function Upload() {
   const [showDebug, setShowDebug] = useState(false)
   const [judgeMode, setJudgeMode] = useState(false)
 
-  const onDrop = useCallback(async (accepted: File[]) => {
-    const file = accepted[0]
-    if (!file) return
-    setPreview(URL.createObjectURL(file))
+  // Detection engine state
+  const [engines, setEngines] = useState<DetectionEngine[]>([])
+  const [selectedEngine, setSelectedEngine] = useState('auto')
+  const [hfToken, setHfToken] = useState('')
+  const [owlvitCompat, setOwlvitCompat] = useState<OwlVitCompat | null>(null)
+  const [owlvitDownloading, setOwlvitDownloading] = useState(false)
+  const [owlvitDownloadResult, setOwlvitDownloadResult] = useState<OwlVitDownloadResult | null>(null)
+  const [fileSelected, setFileSelected] = useState<File | null>(null)
+
+  // Load available engines and OwlViT compat on mount
+  useEffect(() => {
+    getDetectionEngines().then(res => {
+      setEngines(res.engines)
+      // Pre-set engine based on availability
+      const preferred = res.engines.find(e => e.id === 'locateanything' && e.token_set)
+      if (preferred) {
+        setSelectedEngine('locateanything')
+      }
+    }).catch(() => {})
+    checkOwlvitCompat().then(setOwlvitCompat).catch(() => {})
+  }, [])
+
+  // Re-check compat when owlvit_local is selected
+  useEffect(() => {
+    if (selectedEngine === 'owlvit_local' && !owlvitCompat) {
+      checkOwlvitCompat().then(setOwlvitCompat).catch(() => {})
+    }
+  }, [selectedEngine, owlvitCompat])
+
+  const runAnalysis = useCallback(async () => {
+    if (!fileSelected) return
     setResult(null)
     setError(null)
     setLoading(true)
     try {
-      const res = await uploadImage(file)
+      const res = await uploadImage(fileSelected, selectedEngine, hfToken)
       const motorcycles = res.detections.filter(d => d.label === 'motorcycle')
       const persons = res.detections.filter(d => d.label === 'person')
       const totalOccupants = res.motorcycle_riders?.reduce((s, mr) => s + mr.rider_count, 0) || 0
@@ -181,12 +392,40 @@ export default function Upload() {
       console.log('risk_score:', res.risk_score)
       console.log('crowded_scene:', res.crowded_scene)
       console.log('ai_review_recommended:', res.ai_review_recommended)
+      console.log('detection_engine:', selectedEngine)
       console.log('================================')
       setResult(res)
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Analysis failed.')
     } finally {
       setLoading(false)
+    }
+  }, [fileSelected, selectedEngine, hfToken])
+
+  const onDrop = useCallback(async (accepted: File[]) => {
+    const file = accepted[0]
+    if (!file) return
+    setPreview(URL.createObjectURL(file))
+    setFileSelected(file)
+    setResult(null)
+    setError(null)
+  }, [])
+
+  const handleDownloadOwlvit = useCallback(async () => {
+    setOwlvitDownloading(true)
+    setOwlvitDownloadResult(null)
+    try {
+      const res = await downloadOwlvitModel()
+      setOwlvitDownloadResult(res)
+      if (res.success) {
+        // Re-check availability
+        const enginesRes = await getDetectionEngines()
+        setEngines(enginesRes.engines)
+      }
+    } catch (e: any) {
+      setOwlvitDownloadResult({ success: false, message: e?.message || 'Download failed', model_path: '', model_size_mb: 0 })
+    } finally {
+      setOwlvitDownloading(false)
     }
   }, [])
 
@@ -206,11 +445,13 @@ export default function Upload() {
           </div>
           {result?.detection_model && (
             <div className="mt-1 flex items-center gap-2">
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1a2040] text-trinetra-muted border border-trinetra-border">
-                {result.detection_model.active_mode === 'yolo_fallback' ? 'YOLOv8' :
-                 result.detection_model.active_mode === 'owlvit_local' ? 'OwlViT' :
-                 result.detection_model.active_mode?.startsWith('locateanything') ? 'LocateAnything' :
-                 result.detection_model.active_mode || 'YOLOv8'}
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                result.detection_model.active_mode === 'yolo' ? 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30' :
+                result.detection_model.active_mode?.startsWith('hf_inference') ? 'bg-purple-500/10 text-purple-300 border-purple-500/30' :
+                result.detection_model.active_mode === 'owlvit_local' ? 'bg-blue-500/10 text-blue-300 border-blue-500/30' :
+                'bg-green-500/10 text-green-300 border-green-500/30'
+              }`}>
+                {result.detection_model.engine_label || result.detection_model.active_mode}
               </span>
               {result.helmet_model?.model_name && (
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1a2040] text-trinetra-muted border border-trinetra-border">
@@ -257,6 +498,24 @@ export default function Upload() {
         </div>
       </div>
 
+      {/* Engine Selector — shown after file is selected */}
+      {fileSelected && !result && !loading && (
+        <DetectionEngineSelector
+          engines={engines}
+          selectedEngine={selectedEngine}
+          onEngineChange={setSelectedEngine}
+          hfToken={hfToken}
+          onHfTokenChange={setHfToken}
+          owlvitCompat={owlvitCompat}
+          owlvitDownloading={owlvitDownloading}
+          owlvitDownloadResult={owlvitDownloadResult}
+          onDownloadOwlvit={handleDownloadOwlvit}
+          onAnalyze={runAnalysis}
+          loading={loading}
+          hasFile={!!fileSelected}
+        />
+      )}
+
       {preview && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
           <div className="glass rounded-xl p-4">
@@ -293,7 +552,6 @@ export default function Upload() {
 
       {result && !loading && (
         <div className={`space-y-6 mt-8 ${judgeMode ? 'p-4 rounded-2xl border-2 border-purple-500/30 bg-purple-500/[0.02]' : ''}`}>
-          {/* Judge Mode banner */}
           {judgeMode && (
             <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 text-center">
               <Presentation className="w-6 h-6 text-purple-400 mx-auto mb-2" />
@@ -313,10 +571,8 @@ export default function Upload() {
             </div>
           )}
 
-          {/* Executive Summary — always shown */}
           <ExecutiveSummaryCard result={result} />
 
-          {/* Developer Diagnostics — hidden by default (Officer Mode) */}
           {!judgeMode && (
             <button
               onClick={() => setShowDebug(!showDebug)}
@@ -347,7 +603,6 @@ export default function Upload() {
             </div>
           )}
 
-          {/* Violation Report */}
           <div className="glass rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-white">Violation Report</h3>
@@ -380,7 +635,6 @@ export default function Upload() {
                     'border-trinetra-border'
                   }`}>
                     <div className="p-4">
-                      {/* Simplified header: Type + Confidence + Risk */}
                       <div className="flex items-start justify-between flex-wrap gap-2 mb-3">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-white text-sm">
@@ -406,7 +660,6 @@ export default function Upload() {
                         </div>
                       </div>
 
-                      {/* Reason (Explainable) */}
                       {v.explainable_reason && (
                         <div className="mb-3 p-3 rounded-lg bg-[#0d1225] border border-trinetra-border">
                           <div className="flex items-center gap-1.5 text-xs text-trinetra-muted mb-1">
@@ -416,7 +669,6 @@ export default function Upload() {
                         </div>
                       )}
 
-                      {/* Recommendation */}
                       {v.enforcement_recommendation && (
                         <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
                           <div className="flex items-center gap-1.5 text-xs text-blue-400 mb-1">
@@ -426,7 +678,6 @@ export default function Upload() {
                         </div>
                       )}
 
-                      {/* Judge Mode: show business value summary */}
                       {judgeMode && (
                         <div className="mt-3 p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
                           <div className="flex items-center gap-1.5 text-xs text-purple-400 mb-1">
@@ -457,7 +708,6 @@ export default function Upload() {
                       <span className="inline-flex items-center gap-1.5 text-xs bg-emerald-500/20 text-emerald-300 px-3 py-1.5 rounded-full">
                         <CheckCircle className="w-3.5 h-3.5" /> No Action Required
                       </span>
-                      {/* Judge Mode: show compliance business value */}
                       {judgeMode && (
                         <div className="mt-4 p-4 rounded-lg bg-purple-500/5 border border-purple-500/20 text-left">
                           <div className="flex items-center gap-1.5 text-xs text-purple-400 mb-2">
@@ -515,7 +765,6 @@ export default function Upload() {
             </div>
           )}
 
-          {/* Detection Engine Info */}
           {result.detection_model && (
             <div className="glass rounded-xl p-4">
               <h3 className="text-xs font-semibold text-trinetra-muted mb-2 flex items-center gap-1.5">
@@ -523,18 +772,17 @@ export default function Upload() {
               </h3>
               <div className="flex flex-wrap gap-2">
                 <span className={`text-xs font-mono px-2 py-1 rounded-full border ${
-                  result.detection_model.active_mode === 'yolo_fallback'
+                  result.detection_model.active_mode === 'yolo'
                     ? 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30'
-                    : result.detection_model.active_mode?.startsWith('locateanything')
+                    : result.detection_model.active_mode === 'hf_inference_api_owlvit'
                     ? 'bg-purple-500/10 text-purple-300 border-purple-500/30'
                     : result.detection_model.active_mode === 'owlvit_local'
                     ? 'bg-blue-500/10 text-blue-300 border-blue-500/30'
-                    : 'bg-green-500/10 text-green-300 border-green-500/30'
+                    : result.detection_model.active_mode?.startsWith('locateanything')
+                    ? 'bg-green-500/10 text-green-300 border-green-500/30'
+                    : 'bg-gray-500/10 text-gray-300 border-gray-500/30'
                 }`}>
-                  {result.detection_model.active_mode === 'yolo_fallback' ? '🟡 YOLOv8 (Fallback)' :
-                   result.detection_model.active_mode?.startsWith('locateanything') ? '🟢 LocateAnything (Gradio)' :
-                   result.detection_model.active_mode === 'owlvit_local' ? '🔵 OwlViT (Local)' :
-                   result.detection_model.active_mode || '⚪ Unknown'}
+                  {result.detection_model.engine_label || result.detection_model.active_mode}
                 </span>
                 {result.helmet_model?.model_name && (
                   <span className="text-xs font-mono px-2 py-1 rounded-full bg-[#1a2040] text-trinetra-muted border border-trinetra-border">
@@ -545,7 +793,6 @@ export default function Upload() {
             </div>
           )}
 
-          {/* Image Quality Assessment */}
           {result.image_quality && (
             <div className="glass rounded-xl p-6">
               <h3 className="text-sm font-semibold text-trinetra-text mb-3 flex items-center gap-2">
@@ -576,7 +823,6 @@ export default function Upload() {
             </div>
           )}
 
-          {/* AI Safety & Review — Human-in-the-Loop Panel */}
           <div className="glass rounded-xl p-6 border-l-4 border-l-emerald-500">
             <h3 className="text-sm font-semibold text-emerald-400 mb-3 flex items-center gap-2">
               <Shield className="w-4 h-4" /> AI Safety &amp; Review — Human-in-the-Loop

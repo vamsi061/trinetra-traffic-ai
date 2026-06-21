@@ -1,8 +1,9 @@
 import os, uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Body
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Body
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -10,7 +11,7 @@ import cv2
 import numpy as np
 
 from utils.image_processing import enhance_image
-from ai.locate_anything import LocateAnythingDetector
+from ai.locate_anything import LocateAnythingDetector, check_owlvit_compatibility, download_owlvit_model, ENGINE_LABELS
 from ai.helmet_detector import check_helmet_violation
 from ai.triple_riding import check_triple_riding
 from ai.quality_assessment import assess_quality
@@ -230,8 +231,32 @@ def health():
     return {"status": "operational", "service": "TRINETRA AI — Traffic Enforcement Intelligence", "version": "3.0.0"}
 
 
+@app.get("/api/detect/engines")
+def list_engines():
+    """Return available detection engines and their status."""
+    detector = LocateAnythingDetector()
+    return {'engines': detector.get_available_engines()}
+
+
+@app.get("/api/detect/owlvit-compatibility")
+def owlvit_compat():
+    """Check if local OwlViT can run on this machine."""
+    return check_owlvit_compatibility()
+
+
+@app.post("/api/detect/download-owlvit")
+async def download_owlvit():
+    """Download OwlViT model from HuggingFace."""
+    result = download_owlvit_model()
+    return result
+
+
 @app.post("/api/detect")
-async def detect_violations(file: UploadFile = File(...)):
+async def detect_violations(
+    file: UploadFile = File(...),
+    detection_engine: str = Form('auto'),
+    hf_token: Optional[str] = Form(None),
+):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(400, "File must be an image")
 
@@ -248,7 +273,11 @@ async def detect_violations(file: UploadFile = File(...)):
 
     processed = enhance_image(image)
     detector = LocateAnythingDetector()
-    raw_detections = detector.detect(processed)
+
+    if detection_engine == 'auto':
+        raw_detections = detector.detect(processed)
+    else:
+        raw_detections = detector.detect_with_engine(processed, detection_engine, hf_token=hf_token)
 
     # Filter low-confidence vehicles
     filtered = []
@@ -477,6 +506,20 @@ async def detect_violations(file: UploadFile = File(...)):
 
     # Detector model diagnostics
     detection_model_info = detector.get_model_info()
+    detection_model_info['selected_engine'] = detection_engine
+    # Add user-friendly label
+    from ai.locate_anything import ENGINE_LABELS
+    mode = detection_model_info.get('active_mode', '')
+    if mode.startswith('hf_inference'):
+        detection_model_info['engine_label'] = ENGINE_LABELS.get('locateanything', 'OwlViT HF API')
+    elif mode == 'yolo':
+        detection_model_info['engine_label'] = ENGINE_LABELS.get('yolo', 'YOLOv8')
+    elif mode == 'owlvit_local':
+        detection_model_info['engine_label'] = ENGINE_LABELS.get('owlvit_local', 'OwlViT Local')
+    elif mode.startswith('locateanything_api'):
+        detection_model_info['engine_label'] = ENGINE_LABELS.get('locateanything_gradio', 'LocateAnything Gradio')
+    else:
+        detection_model_info['engine_label'] = mode or 'Unknown'
 
     # Helmet model diagnostics
     helmet_service = get_helmet_service()
