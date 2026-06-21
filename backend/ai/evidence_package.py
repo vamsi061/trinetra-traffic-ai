@@ -115,31 +115,32 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
         pdf.set_text_color(60, 60, 60)
         pdf.cell(0, 7, 'No violations detected.', new_x="LMARGIN", new_y="NEXT")
     else:
-        # Longer columns for readability
-        viol_col_w = [48, 26, 24, 30, 22, 40]
-        viol_headers = ['Type', 'Confidence', 'Reliability', 'Review Status', 'Priority', 'Recommendation']
-
-        pdf.set_font('Helvetica', 'B', 9)
-        pdf.set_fill_color(235, 240, 250)
-        pdf.set_draw_color(180, 190, 210)
-        for i, h in enumerate(viol_headers):
-            pdf.cell(viol_col_w[i], 8, h, border=1, fill=True)
-        pdf.ln()
-
         pdf.set_font('Helvetica', '', 8)
         pdf.set_text_color(0, 0, 0)
-        row_h = 8
-        for v in violations:
-            vtype = v.get('type', v.get('violation_type', 'Unknown')).replace('_', ' ').title()
-            conf = v.get('confidence_label', f"{v.get('confidence', 0)*100:.0f}%")
-            rel = v.get('reliability_badge', {}).get('label', 'N/A')
-            review = v.get('human_review_status', 'N/A').replace('_', ' ').title()
-            pri = v.get('officer_priority', 'Medium').title()
-            rec = v.get('enforcement_recommendation', 'N/A')[:50]
-            vals = [vtype, conf, rel, review, pri, rec]
-            for i, val in enumerate(vals):
-                pdf.cell(viol_col_w[i], row_h, val, border=1)
-            pdf.ln()
+        col_w = [48, 26, 24, 30, 22, 40]
+        pdf.set_fill_color(235, 240, 250)
+        with pdf.table(
+            col_widths=col_w,
+            text_align='LEFT',
+            first_row_as_headings=True,
+            line_height=5,
+        ) as table:
+            table.headers = ['Type', 'Confidence', 'Reliability',
+                             'Review Status', 'Priority', 'Recommendation']
+            for v in violations:
+                vtype = v.get('type', v.get('violation_type', 'Unknown')).replace('_', ' ').title()
+                conf = v.get('confidence_label', f"{v.get('confidence', 0)*100:.0f}%")
+                rel = v.get('reliability_badge', {}).get('label', 'N/A')
+                review = v.get('human_review_status', 'N/A').replace('_', ' ').title()
+                pri = v.get('officer_priority', 'Medium').title()
+                rec = v.get('enforcement_recommendation', 'N/A')
+                row = table.row()
+                row.cell(vtype)
+                row.cell(conf)
+                row.cell(rel)
+                row.cell(review)
+                row.cell(pri)
+                row.cell(rec)
         pdf.ln(4)
 
     # ——— 5. Officer Notes ———
