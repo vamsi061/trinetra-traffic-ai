@@ -623,12 +623,26 @@ def list_violations(
         date_to=date_to,
         location=location,
     )
-    return {"total": len(violations_list), "violations": [v.to_dict() for v in violations_list[:limit]]}
+    items = []
+    for v in violations_list[:limit]:
+        d = v.to_dict()
+        for key in ('evidence_path', 'image_path'):
+            if d.get(key):
+                d[key] = os.path.basename(d[key])
+        items.append(d)
+    return {"total": len(violations_list), "violations": items}
 
 
 @app.get("/api/violations/recent")
 def recent_violations(limit: int = Query(10)):
-    return {"violations": [v.to_dict() for v in get_recent_violations(limit)]}
+    items = []
+    for v in get_recent_violations(limit):
+        d = v.to_dict()
+        for key in ('evidence_path', 'image_path'):
+            if d.get(key):
+                d[key] = os.path.basename(d[key])
+        items.append(d)
+    return {"violations": items}
 
 
 @app.get("/api/violations/stats")
