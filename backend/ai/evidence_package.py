@@ -5,7 +5,7 @@ from fpdf import FPDF
 import config
 
 
-def generate_evidence_report(image_path, detections, violations, license_plate, quality, risk_score, risk_status, source_filename=None):
+def generate_evidence_report(image_path, detections, violations, license_plate, quality, risk_score, risk_status, source_filename=None, enhancement_report=None, quality_analysis=None, scene_understanding=None, ai_review_panel=None):
     """Generate a PDF evidence package for officer review."""
     os.makedirs(config.REPORT_DIR, exist_ok=True)
     report_id = uuid.uuid4().hex[:12]
@@ -75,6 +75,64 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
         pdf.set_font('Helvetica', '', 10)
         pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
+
+    # ——— 2b. Image Enhancement ———
+    if enhancement_report or quality_analysis:
+        pdf.set_font('Helvetica', 'B', 13)
+        pdf.set_text_color(20, 60, 120)
+        pdf.cell(0, 9, '2a. Image Enhancement Pipeline', new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(1)
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+
+        if enhancement_report:
+            steps_applied = enhancement_report.get('steps_applied', [])
+            failover = enhancement_report.get('failover_used', False)
+            quality_delta = enhancement_report.get('quality_delta', 0)
+            fallback_reason = enhancement_report.get('fallback_reason', '')
+
+            pdf.set_font('Helvetica', 'B', 10)
+            pdf.cell(0, 7, 'Enhancement Steps:', new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font('Helvetica', '', 10)
+            if steps_applied:
+                for step in steps_applied:
+                    pdf.cell(0, 6, f'  - {step}', new_x="LMARGIN", new_y="NEXT")
+            else:
+                pdf.cell(0, 6, '  (None - image already good quality)', new_x="LMARGIN", new_y="NEXT")
+
+            if failover:
+                pdf.set_font('Helvetica', 'I', 9)
+                pdf.set_text_color(200, 100, 30)
+                pdf.cell(0, 6, f'  Fallback mode: {fallback_reason}', new_x="LMARGIN", new_y="NEXT")
+                pdf.set_text_color(0, 0, 0)
+
+            pdf.ln(1)
+            pdf.set_font('Helvetica', '', 10)
+            quality_change = f'{quality_delta:+.1f}%' if quality_delta else 'N/A'
+            for label, value in [
+                ('Quality Change', quality_change),
+                ('Failover Used', 'Yes' if failover else 'No'),
+            ]:
+                pdf.set_font('Helvetica', 'B', 10)
+                pdf.cell(42, 7, label + ':')
+                pdf.set_font('Helvetica', '', 10)
+                pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
+
+        if quality_analysis:
+            pdf.ln(1)
+            pdf.set_font('Helvetica', 'B', 10)
+            pdf.cell(0, 7, 'Quality Metrics:', new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font('Helvetica', '', 10)
+            for metric in ['brightness', 'contrast', 'sharpness', 'noise']:
+                val = quality_analysis.get(metric)
+                if val is not None:
+                    status = 'Good' if val > 0.4 else ('Fair' if val > 0.2 else 'Poor')
+                    pdf.cell(0, 6, f'  {metric.title()}: {val:.2f} ({status})', new_x="LMARGIN", new_y="NEXT")
+            issues = quality_analysis.get('issues', [])
+            if issues:
+                pdf.cell(0, 6, f'  Detected Issues: {", ".join(issues)}', new_x="LMARGIN", new_y="NEXT")
+
+        pdf.ln(3)
 
     # ——— 3. Detected Objects ———
     pdf.set_font('Helvetica', 'B', 13)
@@ -162,7 +220,73 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
                 row.cell(rec)
         pdf.ln(4)
 
-    # ——— 5. Officer Notes ———
+    # ——— 5. Scene Understanding (AI Analysis) ———
+    if scene_understanding:
+        pdf.set_draw_color(20, 60, 120)
+        pdf.set_line_width(0.3)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(3)
+
+        pdf.set_font('Helvetica', 'B', 13)
+        pdf.set_text_color(20, 60, 120)
+        pdf.cell(0, 9, '5. Scene Understanding (AI Analysis)', new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(1)
+
+        narrative = scene_understanding.get('narrative', '')
+        analysis_type = scene_understanding.get('analysis_type', 'template')
+        reasoning_conf = scene_understanding.get('confidence', 0)
+
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        if narrative:
+            pdf.set_font('Helvetica', 'I', 10)
+            pdf.multi_cell(0, 6, f'"{narrative}"')
+            pdf.ln(2)
+
+        for label, value in [
+            ('Analysis Engine', 'Florence-2' if analysis_type == 'florence-2' else 'Template-based'),
+            ('Reasoning Confidence', f'{reasoning_conf*100:.0f}%'),
+        ]:
+            pdf.set_font('Helvetica', 'B', 10)
+            pdf.cell(42, 7, label + ':')
+            pdf.set_font('Helvetica', '', 10)
+            pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(3)
+
+    # ——— 6. AI Verification Summary ———
+    if ai_review_panel:
+        pdf.set_draw_color(20, 60, 120)
+        pdf.set_line_width(0.3)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(3)
+
+        pdf.set_font('Helvetica', 'B', 13)
+        pdf.set_text_color(20, 60, 120)
+        pdf.cell(0, 9, '6. AI Verification Summary', new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(1)
+
+        v_status = ai_review_panel.get('verification_status', 'N/A').replace('_', ' ').title()
+        v_verified = ai_review_panel.get('violations_verified', 0)
+        v_unverified = ai_review_panel.get('violations_unverified', 0)
+        avg_conf = ai_review_panel.get('average_verification_confidence', 0)
+        enforcement = ai_review_panel.get('enforcement_readiness', 'N/A').replace('_', ' ').title()
+
+        pdf.set_font('Helvetica', '', 10)
+        pdf.set_text_color(0, 0, 0)
+        for label, value in [
+            ('Verification Status', v_status),
+            ('Verified Violations', str(v_verified)),
+            ('Unverified Violations', str(v_unverified)),
+            ('Avg Verification Confidence', f'{avg_conf*100:.0f}%' if avg_conf else 'N/A'),
+            ('Enforcement Readiness', enforcement),
+        ]:
+            pdf.set_font('Helvetica', 'B', 10)
+            pdf.cell(50, 7, label + ':')
+            pdf.set_font('Helvetica', '', 10)
+            pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(3)
+
+    # ——— 7. Officer Notes ———
     pdf.set_draw_color(20, 60, 120)
     pdf.set_line_width(0.3)
     y_before = pdf.get_y()
@@ -171,14 +295,14 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
 
     pdf.set_font('Helvetica', 'B', 13)
     pdf.set_text_color(20, 60, 120)
-    pdf.cell(0, 9, '5. Officer Notes', new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 9, '7. Officer Notes', new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
     pdf.set_font('Helvetica', 'I', 10)
     pdf.set_text_color(100, 100, 100)
     pdf.multi_cell(0, 6, '(Add notes, findings, or enforcement decisions for review)')
     pdf.ln(5)
 
-    # ——— 6. System Info (Footer) ———
+    # ——— 8. System Info (Footer) ———
     pdf.set_draw_color(20, 60, 120)
     pdf.set_line_width(0.3)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())

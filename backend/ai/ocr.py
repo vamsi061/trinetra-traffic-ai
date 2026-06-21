@@ -8,6 +8,12 @@ try:
 except ImportError:
     EASYOCR_AVAILABLE = False
 
+try:
+    from paddleocr import PaddleOCR
+    PADDLEOCR_AVAILABLE = True
+except ImportError:
+    PADDLEOCR_AVAILABLE = False
+
 
 class LicensePlateReader:
     _instance = None
@@ -15,13 +21,27 @@ class LicensePlateReader:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance.reader = None
+            cls._instance.easyocr_reader = None
+            cls._instance.paddleocr_reader = None
+            cls._instance._ocr_mode = 'paddle' if PADDLEOCR_AVAILABLE else 'easyocr'
         return cls._instance
 
-    def load_reader(self):
-        if self.reader is None and EASYOCR_AVAILABLE:
-            self.reader = easyocr.Reader(['en'], gpu=False)
-        return self.reader
+    def _load_paddleocr(self):
+        if self.paddleocr_reader is None and PADDLEOCR_AVAILABLE:
+            self.paddleocr_reader = PaddleOCR(use_angle_cls=True, lang='en', show_log=False)
+        return self.paddleocr_reader
+
+    def _load_easyocr(self):
+        if self.easyocr_reader is None and EASYOCR_AVAILABLE:
+            self.easyocr_reader = easyocr.Reader(['en'], gpu=False)
+        return self.easyocr_reader
+
+    def get_ocr_info(self):
+        return {
+            'primary': self._ocr_mode,
+            'paddleocr_available': PADDLEOCR_AVAILABLE,
+            'easyocr_available': EASYOCR_AVAILABLE,
+        }
 
     def extract_plate_region(self, image, vehicle_bbox):
         x1, y1, x2, y2 = [int(v) for v in vehicle_bbox]
@@ -141,11 +161,43 @@ class LicensePlateReader:
     def _run_easyocr(self, image):
         if not EASYOCR_AVAILABLE:
             return '', 0.0
-        self.load_reader()
-        if not self.reader:
+        self._load_easyocr()
+        if not self.easyocr_reader:
             return '', 0.0
-        results = self.reader.readtext(image)
+        results = self.easyocr_reader.readtext(image)
         return self._combine_fragments(results)
+
+    def _run_paddleocr(self, image):
+        if not PADDLEOCR_AVAILABLE:
+            return '', 0.0
+        self._load_paddleocr()
+        if not self.paddleocr_reader:
+            return '', 0.0
+        result = self.paddleocr_reader.ocr(image, cls=True)
+        if not result or not result[0]:
+            return '', 0.0
+        fragments = []
+        for line in result[0]:
+            bbox, (text, conf) = line
+            cleaned = re.sub(r'[^A-Za-z0-9]', '', text).upper()
+            if len(cleaned) >= 2 and conf >= config.OCR_CONFIDENCE_THRESHOLD:
+                cx = min(p[0] for p in bbox)
+                fragments.append({'text': cleaned, 'conf': conf, 'cx': cx})
+        if not fragments:
+            return '', 0.0
+        fragments.sort(key=lambda x: x['cx'])
+        combined = ''.join(g['text'] for g in fragments)
+        avg_conf = sum(g['conf'] for g in fragments) / len(fragments)
+        return combined, avg_conf
+
+    def _run_ocr(self, image):
+        """Run primary OCR (PaddleOCR), fallback to EasyOCR."""
+        if self._ocr_mode == 'paddle' and PADDLEOCR_AVAILABLE:
+            text, conf = self._run_paddleocr(image)
+            if text:
+                return text, conf, 'paddleocr'
+        text, conf = self._run_easyocr(image)
+        return text, conf, 'easyocr' if text else ('', 0.0, 'none')
 
     def _upscale_region(self, region, target_height=200):
         h, w = region.shape[:2]
@@ -157,14 +209,12 @@ class LicensePlateReader:
 
     def read_plate(self, image, vehicle_bbox):
         full = self.extract_full_vehicle_region(image, vehicle_bbox)
-        best_text, best_conf = '', 0.0
+        best_text, best_conf, best_engine = '', 0.0, 'none'
 
         if full is not None and full.size > 0 and full.shape[0] > 20 and full.shape[1] > 20:
-            # Upscale for better OCR
             upscaled = self._upscale_region(full)
             gray = cv2.cvtColor(upscaled, cv2.COLOR_BGR2GRAY)
 
-            # Try multiple preprocessing methods on the full region
             methods = [
                 ('raw_bgr', upscaled),
                 ('grayscale', gray),
@@ -175,33 +225,30 @@ class LicensePlateReader:
             ]
 
             for name, proc in methods:
-                text, conf = self._run_easyocr(proc)
+                text, conf, engine = self._run_ocr(proc)
                 if text:
-                    # Prefer text that matches a valid plate format
                     text_valid = self.validate_plate_format(text)
                     best_valid = self.validate_plate_format(best_text) if best_text else False
                     if text_valid and not best_valid:
-                        best_text, best_conf = text, conf
+                        best_text, best_conf, best_engine = text, conf, engine
                     elif not text_valid and best_valid:
                         pass
                     elif len(text) > len(best_text) and conf >= best_conf - 0.1:
-                        best_text, best_conf = text, max(best_conf, conf)
+                        best_text, best_conf, best_engine = text, max(best_conf, conf), engine
                     elif len(text) == len(best_text) and conf > best_conf:
-                        best_text, best_conf = text, conf
+                        best_text, best_conf, best_engine = text, conf, engine
                     elif not best_text:
-                        best_text, best_conf = text, conf
+                        best_text, best_conf, best_engine = text, conf, engine
 
-        # Fallback: lower region for cars
         if best_text and best_conf >= 0.3:
-            return best_text, best_conf
+            return best_text, best_conf, best_engine
 
         region = self.extract_plate_region(image, vehicle_bbox)
         if region is not None and region.size > 0:
-            text, conf = self._run_easyocr(region)
+            text, conf, engine = self._run_ocr(region)
             if text and conf > best_conf:
-                best_text, best_conf = text, conf
+                best_text, best_conf, best_engine = text, conf, engine
 
-        # Contour fallback
         if full is not None and full.size > 0 and not best_text:
             candidates = self.find_plate_contours(full)
             if candidates:
@@ -211,8 +258,8 @@ class LicensePlateReader:
                         up = self._upscale_region(plate_roi)
                         gray = cv2.cvtColor(up, cv2.COLOR_BGR2GRAY)
                         _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-                        text, conf = self._run_easyocr(thresh)
+                        text, conf, engine = self._run_ocr(thresh)
                         if text and conf > best_conf:
-                            best_text, best_conf = text, conf
+                            best_text, best_conf, best_engine = text, conf, engine
 
-        return best_text, best_conf
+        return best_text, best_conf, best_engine

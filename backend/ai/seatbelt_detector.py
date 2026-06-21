@@ -121,7 +121,7 @@ def check_seatbelt_violation(detections, image):
         best_overlap = 0.0
 
         for person in persons:
-            if person['confidence'] < 0.5:
+            if person['confidence'] < 0.25:
                 continue
             if is_person_in_car(person['bbox'], car['bbox']):
                 inter_area = max(0, min(person['bbox'][2], car['bbox'][2]) - max(person['bbox'][0], car['bbox'][0])) * \

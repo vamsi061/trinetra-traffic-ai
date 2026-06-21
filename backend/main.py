@@ -1,4 +1,4 @@
-import os, uuid
+import os, sys, uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -10,11 +10,12 @@ from fastapi.staticfiles import StaticFiles
 import cv2
 import numpy as np
 
-from utils.image_processing import enhance_image
+from utils.image_processing import enhance_image, create_comparison, analyze_image_quality, get_enhancement_report
 from ai.locate_anything import LocateAnythingDetector, check_owlvit_compatibility, download_owlvit_model, ENGINE_LABELS
 from ai.helmet_detector import check_helmet_violation
 from ai.triple_riding import check_triple_riding
 from ai.quality_assessment import assess_quality
+from utils.image_processing import analyze_image_quality, get_enhancement_report
 from ai.parking_detector import check_illegal_parking
 from ai.seatbelt_detector import check_seatbelt_violation
 from ai.wrong_side_detector import check_wrong_side_violation
@@ -32,6 +33,9 @@ from ai.forecast_engine import get_predictions, get_tomorrow_forecast, generate_
 from ai.report_generator import generate_report, list_reports
 from ai.risk_scoring import compute_enhanced_risk, get_risk_status
 from ai.vehicle_risk import compute_vehicle_risk_profile
+from ai.scene_reasoning import SceneReasoningService
+from ai.ai_verifier import AIVerificationEngine
+from ai.confidence_fusion import fuse_violation, fuse_ocr
 from database.db import (
     init_db, insert_violation, get_all_violations,
     get_statistics, get_violations_by_type, get_violations_by_day,
@@ -207,12 +211,40 @@ def _build_explainable_reason(violation_type, details):
     return reason
 
 
+def _check_helmet_model():
+    """Startup validation: check helmet model, log status, fail loudly if missing after acquisition."""
+    model_path = os.path.join(os.path.dirname(__file__), 'models', 'helmet_yolov8n.pt')
+    exists = os.path.exists(model_path)
+    border = "=" * 60
+    print(f"\n{border}")
+    if exists:
+        size = os.path.getsize(model_path) / (1024 * 1024)
+        print(f"  HELMET MODEL: FOUND ({model_path}) — {size:.1f} MB")
+        try:
+            from ultralytics import YOLO
+            model = YOLO(model_path)
+            print(f"  CLASSES: {model.names}")
+            print(f"  STATUS: READY")
+        except Exception as e:
+            print(f"  STATUS: FAILED TO LOAD — {e}")
+            print(f"  ACTION: Run 'python download_helmet_model.py' to re-acquire")
+            sys.exit(1)
+    else:
+        print(f"  HELMET MODEL: NOT FOUND at {model_path}")
+        print(f"  STATUS: Using HSV fallback (limited accuracy)")
+        print(f"  ACTION: Run 'python download_helmet_model.py' to download")
+        print(f"  SOURCE: https://huggingface.co/iam-tsr/yolov8n-helmet-detection")
+    print(f"{border}\n")
+    return exists
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     os.makedirs(config.UPLOAD_DIR, exist_ok=True)
     os.makedirs(config.EVIDENCE_DIR, exist_ok=True)
     os.makedirs(config.REPORT_DIR, exist_ok=True)
+    _check_helmet_model()
     yield
 
 app = FastAPI(title="TRINETRA AI — Traffic Enforcement Intelligence Platform", version="3.0.0", lifespan=lifespan)
@@ -365,7 +397,6 @@ async def detect_violations(
                 violations.append(v)
 
     # ————— Compliance Assessment (FINAL decision) —————
-    # A vehicle can only be COMPLIANT if no violations are detected.
     ALL_VIOLATION_TYPES = (
         'NO_HELMET', 'TRIPLE_RIDING', 'MOTORCYCLE_OVERLOADING',
         'MOTORCYCLE_EXTREME_OVERLOADING', 'POSSIBLE_ILLEGAL_PARKING',
@@ -376,14 +407,21 @@ async def detect_violations(
         vt in ALL_VIOLATION_TYPES
         for vt in [v['violation_type'] for v in violations]
     )
+
+    # Check if any rider has HELMET_UNKNOWN state
+    helmet_unknown = any(v.get('helmet_state') == 'HELMET_UNKNOWN' for v in violations)
+
     if not has_actual_violations:
         motorcycles_check = any(d['label'] == 'motorcycle' for d in detections)
         persons_check = any(d['label'] == 'person' for d in detections)
         if motorcycles_check and persons_check:
-            compliance_status = 'COMPLIANT'
-            compliance_reason = 'All observed vehicles appear compliant with traffic regulations.'
+            if helmet_unknown:
+                compliance_status = 'HELMET_UNKNOWN'
+                compliance_reason = 'Helmet state uncertain for one or more riders. Human review recommended.'
+            else:
+                compliance_status = 'COMPLIANT'
+                compliance_reason = 'All observed vehicles appear compliant with traffic regulations.'
         else:
-            # No motorcycle, or motorcycle without visible rider — insufficient data
             compliance_status = 'NONE'
             compliance_reason = ''
     else:
@@ -391,7 +429,7 @@ async def detect_violations(
         compliance_reason = ''
 
     # ————— License Plate OCR —————
-    plate_text, plate_conf = "", 0.0
+    plate_text, plate_conf, plate_engine = "", 0.0, 'none'
     vehicles = [d for d in detections if d['class_id'] in (2, 3, 5, 7)]
     if vehicles:
         reader = LicensePlateReader()
@@ -403,9 +441,9 @@ async def detect_violations(
             3: 3,    # motorcycle — smallest plate, hardest to read
         }.get(v['class_id'], 9))
         for veh in vehs_by_type:
-            text, conf = reader.read_plate(image, veh["bbox"])
+            text, conf, engine = reader.read_plate(image, veh["bbox"])
             if text and conf > plate_conf:
-                plate_text, plate_conf = text, conf
+                plate_text, plate_conf, plate_engine = text, conf, engine
                 if conf >= 0.5:
                     break
 
@@ -440,8 +478,18 @@ async def detect_violations(
 
     evidence_path = generate_evidence(processed, detections, violations, (plate_text, plate_conf), source_filename=file.filename)
 
+    # Save before/after comparison image
+    comparison_img = create_comparison(image, processed)
+    if comparison_img is not None and comparison_img.size > 0:
+        comparison_path = os.path.join(config.UPLOAD_DIR, f"comparison_{filename}")
+        cv2.imwrite(comparison_path, comparison_img)
+    else:
+        comparison_path = None
+
     # Image Quality Assessment
     quality = assess_quality(image)
+    enhancement_report = get_enhancement_report()
+    quality_analysis = analyze_image_quality(image)
 
     # Illegal Parking Detection — skip if vehicle is moving (mounted rider in travel lane)
     has_mc = any(d['label'] == 'motorcycle' for d in detections)
@@ -463,6 +511,41 @@ async def detect_violations(
     # Only add parking violations if no compliance override
     if compliance_status != 'COMPLIANT':
         violations.extend(parking_violations)
+
+    # ————— Scene Reasoning Layer —————
+    scene_reasoner = SceneReasoningService()
+    scene_info = scene_reasoner.reason(
+        image, detections, violations,
+        motorcycle_riders=motorcycle_riders,
+        crowded=crowded_scene,
+        license_plate={'number': plate_text, 'confidence': plate_conf} if plate_text else None,
+        quality_score=quality.get('score'),
+        enhancement_report=enhancement_report,
+    )
+
+    # ————— AI Verification Engine —————
+    ai_verifier = AIVerificationEngine()
+    violations, ai_review = ai_verifier.verify(
+        violations, scene_info, detections, motorcycle_riders,
+        {'number': plate_text} if plate_text else None,
+        compliance_status,
+    )
+
+    # ————— Confidence Fusion —————
+    for v in violations:
+        yolo_conf = v.get('yolo_confidence', None)
+        helmet_conf = v.get('helmet_confidence', None)
+        reasoning_conf = scene_info.get('confidence', None)
+        fused = fuse_violation(
+            v.get('confidence', 0.5),
+            yolo_conf=yolo_conf,
+            helmet_conf=helmet_conf,
+            ocr_conf=plate_conf if plate_text else None,
+            reasoning_conf=reasoning_conf,
+            crowded=crowded_scene,
+        )
+        v['fused_confidence'] = fused['fused']
+        v['confidence_sources'] = fused['sources_used']
 
     # Pedestrian stats
     person_detections = [d for d in detections if d['label'] == 'person']
@@ -521,7 +604,11 @@ async def detect_violations(
     evidence_report_path = generate_evidence_report(
         filepath, detections, violations,
         license_plate_dict, quality, total_risk, risk_status,
-        source_filename=file.filename
+        source_filename=file.filename,
+        enhancement_report=enhancement_report,
+        quality_analysis=quality_analysis,
+        scene_understanding=scene_info,
+        ai_review_panel=ai_review,
     )
 
     # Filter violations for response: skip NORMAL entries
@@ -568,11 +655,23 @@ async def detect_violations(
                           "confidence": round(d["confidence"], 3)} for d in person_detections],
         },
         "image_quality": quality,
+        "image_quality_analysis": quality_analysis,
+        "enhancement_report": enhancement_report,
         "motorcycle_riders": motorcycle_riders,
         "compliance_status": compliance_status,
         "compliance_reason": compliance_reason,
         "detection_model": detection_model_info,
         "helmet_model": helmet_model_info,
+        "startup_diagnostics": {
+            "helmet_model": {
+                "status": "loaded" if helmet_model_info.get('loaded') else "not_found",
+                "path": "backend/models/helmet_yolov8n.pt",
+                "file_exists": os.path.exists(os.path.join(os.path.dirname(__file__), 'models', 'helmet_yolov8n.pt')),
+                "classes": helmet_model_info.get('classes', {}),
+                "inference": "available" if helmet_model_info.get('loaded') else "fallback_hsv",
+                "person_confidence_threshold": 0.25,
+            },
+        },
         "violations": [
             {
                 "type": v["violation_type"],
@@ -604,8 +703,16 @@ async def detect_violations(
             "mode": "Traffic Enforcement Intelligence Center",
             "note": "All violations include confidence-based reporting, explainable AI reasoning, human review status, and enforcement recommendations."
         },
-        "license_plate": {"number": plate_text, "confidence": round(plate_conf, 3), "visibility": plate_visibility} if plate_text else None,
+        "scene_understanding": {
+            "narrative": scene_info.get('narrative', ''),
+            "analysis_type": scene_info.get('analysis_type', 'template'),
+            "reasoning_confidence": scene_info.get('confidence', 0),
+        },
+        "ai_review_panel": ai_review,
+        "ocr_engine": plate_engine if plate_text else None,
+        "license_plate": {"number": plate_text, "confidence": round(plate_conf, 3), "visibility": plate_visibility, "ocr_engine": plate_engine} if plate_text else None,
         "evidence_path": os.path.basename(evidence_path) if evidence_path else None,
+        "comparison_image": os.path.basename(comparison_path) if comparison_path else None,
         "evidence_report": os.path.basename(evidence_report_path) if evidence_report_path else None,
     }
 

@@ -26,7 +26,7 @@ HELMET_STATE_PRESENT = 'HELMET_PRESENT'
 HELMET_STATE_ABSENT = 'NO_HELMET'
 HELMET_STATE_UNKNOWN = 'HELMET_UNKNOWN'
 
-HELMET_MODEL_PATH = os.path.join(os.path.dirname(__file__), '..', 'helmet_yolov8n.pt')
+HELMET_MODEL_PATH = os.path.join(os.path.dirname(__file__), '..', 'models', 'helmet_yolov8n.pt')
 
 
 class HelmetDetectorService:
@@ -298,7 +298,7 @@ def check_helmet_violation(detections, image):
     Returns:
         list of violation dicts
     """
-    persons = [d for d in detections if d['class_id'] == config.PERSON_CLASS_ID and d.get('confidence', 0) >= 0.5]
+    persons = [d for d in detections if d['class_id'] == config.PERSON_CLASS_ID and d.get('confidence', 0) >= 0.25]
     motorcycles = [d for d in detections if d['class_id'] == config.MOTORCYCLE_CLASS_ID]
 
     if not persons or not motorcycles:
@@ -355,10 +355,12 @@ def check_helmet_violation(detections, image):
                         person, mc, hsv_conf, hsv_state, config.RISK_SCORES.get('NO_HELMET', 30),
                         'HSV-based detection: rider without visible protective headgear.'
                     ))
-            elif hsv_state == HELMET_STATE_UNKNOWN and model_available:
-                # Model available but didn't match, HSV uncertain — flag for review
+            elif hsv_state == HELMET_STATE_UNKNOWN:
+                # HSV uncertain — flag for review regardless of model availability
                 violations.append(_make_violation(
                     person, mc, hsv_conf, hsv_state, max(15, config.RISK_SCORES.get('NO_HELMET', 30) - 10),
+                    'Helmet model unavailable. HSV analysis uncertain. Human review required.'
+                    if not model_available else
                     'Helmet model: no matching detection. HSV analysis suggests possible non-compliance.'
                 ))
 
