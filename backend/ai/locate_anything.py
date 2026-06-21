@@ -11,7 +11,7 @@ Detection targets:
   motorcycle, car, person, license plate, helmet, bus, truck, auto rickshaw
 """
 
-import os, io, json, base64, time, logging, shutil
+import os, io, json, base64, time, logging, shutil, re
 from typing import Optional
 
 import cv2
@@ -32,7 +32,8 @@ LOCATE_ANYTHING_SPACES = [
 ]
 
 # Default detection categories (expanded for better zero-shot coverage)
-DEFAULT_CATEGORIES = "motorcycle, car, person, license plate, helmet, bus, truck, auto rickshaw, three wheeler, bicycle, traffic light"
+# Use descriptive phrases for better OwlViT zero-shot performance
+DEFAULT_CATEGORIES = "a motorcycle, a car, a person, a license plate, a helmet, a bus, a truck, an auto rickshaw, a bicycle, a traffic light, a vehicle"
 
 # COCO class mapping for YOLO fallback
 COCO_CLASSES = {
@@ -244,7 +245,10 @@ class LocateAnythingDetector:
     # ────────── Tier 1: HF Inference API (OwlViT) ──────────
 
     def _detect_hf_inference(self, image: np.ndarray, categories: str) -> list:
-        """Use HuggingFace Inference API for zero-shot OwlViT detection."""
+        """Use HuggingFace Inference API for zero-shot OwlViT detection.
+        
+        Sends raw image bytes with candidate_labels as query params (standard HF API format).
+        """
         token = self._hf_token
         if not token:
             return []
@@ -255,18 +259,32 @@ class LocateAnythingDetector:
 
             labels = [c.strip() for c in categories.split(',')]
 
+            # Try: raw image bytes + candidate_labels as query params
             resp = requests.post(
                 OWLVIT_INFERENCE_URL,
-                headers={"Authorization": f"Bearer {token}"},
-                json={
-                    "inputs": base64.b64encode(img_bytes).decode('utf-8'),
-                    "parameters": {"candidate_labels": labels},
+                headers={
+                    "Authorization": f"Bearer {token}",
                 },
-                timeout=30,
+                params={"candidate_labels": ",".join(labels)},
+                data=img_bytes,
+                timeout=60,
             )
 
+            # If that fails, try: base64 image in JSON body
             if resp.status_code != 200:
-                logger.warning(f"HF Inference API returned {resp.status_code}: {resp.text[:200]}")
+                logger.debug(f"HF API raw bytes failed ({resp.status_code}), trying base64 JSON...")
+                resp = requests.post(
+                    OWLVIT_INFERENCE_URL,
+                    headers={"Authorization": f"Bearer {token}"},
+                    json={
+                        "inputs": base64.b64encode(img_bytes).decode('utf-8'),
+                        "parameters": {"candidate_labels": labels},
+                    },
+                    timeout=60,
+                )
+
+            if resp.status_code != 200:
+                logger.warning(f"HF Inference API returned {resp.status_code}: {resp.text[:300]}")
                 return []
 
             results = resp.json()
@@ -279,11 +297,14 @@ class LocateAnythingDetector:
                 box = r.get('box', {})
                 if 'xmin' not in box:
                     continue
+                label_raw = r.get('label', 'object')
+                # Strip leading "a " / "an " from labels if present
+                label_clean = re.sub(r'^(a|an)\s+', '', label_raw, flags=re.IGNORECASE).strip()
                 detections.append({
                     'bbox': [box['xmin'], box['ymin'], box['xmax'], box['ymax']],
                     'confidence': r.get('score', 0.5),
-                    'class_id': self._label_to_class_id(r.get('label', 'object')),
-                    'label': r.get('label', 'object').lower(),
+                    'class_id': self._label_to_class_id(label_clean),
+                    'label': label_clean.lower(),
                 })
 
             if detections:
@@ -337,6 +358,8 @@ class LocateAnythingDetector:
     # ────────── Tier 3: Local OwlViT (transformers) ──────────
 
     def _init_owlvit(self):
+        if self._owl_pipeline is not None:
+            return True
         try:
             import torch
             from transformers import pipeline
@@ -355,26 +378,46 @@ class LocateAnythingDetector:
             return False
 
     def _detect_owlvit(self, image: np.ndarray, categories: str) -> list:
-        if self._owl_pipeline is None:
-            if not self._init_owlvit():
-                return []
+        if not self._init_owlvit():
+            return []
 
         try:
             img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            labels = [c.strip() for c in categories.split(',')]
-            results = self._owl_pipeline(img_rgb, candidate_labels=labels)
+            # Clean labels: remove "a "/"an " prefix for pipeline, keep both variants
+            raw_labels = [c.strip() for c in categories.split(',')]
+            # Use clean labels (without articles) for the pipeline
+            clean_labels = [re.sub(r'^(a|an)\s+', '', l, flags=re.IGNORECASE).strip() for l in raw_labels]
+            results = self._owl_pipeline(img_rgb, candidate_labels=clean_labels)
 
             detections = []
             for r in results:
                 box = r['box']
+                label_raw = r.get('label', 'object')
+                label_clean = re.sub(r'^(a|an)\s+', '', label_raw, flags=re.IGNORECASE).strip()
                 detections.append({
                     'bbox': [box['xmin'], box['ymin'], box['xmax'], box['ymax']],
                     'confidence': r['score'],
-                    'class_id': self._label_to_class_id(r['label']),
-                    'label': r['label'].lower(),
+                    'class_id': self._label_to_class_id(label_clean),
+                    'label': label_clean.lower(),
                 })
             if detections:
                 logger.info(f"OwlViT local: {len(detections)} detections")
+            else:
+                logger.info("OwlViT local: no detections (trying lower confidence threshold)")
+                # Retry with lower threshold — OwlViT can be conservative
+                results = self._owl_pipeline(img_rgb, candidate_labels=clean_labels, threshold=0.05)
+                for r in results:
+                    box = r['box']
+                    label_raw = r.get('label', 'object')
+                    label_clean = re.sub(r'^(a|an)\s+', '', label_raw, flags=re.IGNORECASE).strip()
+                    detections.append({
+                        'bbox': [box['xmin'], box['ymin'], box['xmax'], box['ymax']],
+                        'confidence': r['score'],
+                        'class_id': self._label_to_class_id(label_clean),
+                        'label': label_clean.lower(),
+                    })
+                if detections:
+                    logger.info(f"OwlViT local (low threshold): {len(detections)} detections")
             return detections
         except Exception as e:
             logger.warning(f"OwlViT local: {e}")
@@ -602,7 +645,11 @@ class LocateAnythingDetector:
     # ────────── Public API ──────────
 
     def detect(self, image: np.ndarray, categories: Optional[str] = None) -> list:
-        """Auto-detect with best available method."""
+        """Auto-detect with best available method.
+        
+        Order: HF Inference API → YOLOv8 → OwlViT Local
+        Gradio is excluded from auto mode (too unreliable).
+        """
         cats = categories or DEFAULT_CATEGORIES
 
         dets = self._detect_hf_inference(image, cats)
@@ -618,10 +665,6 @@ class LocateAnythingDetector:
         dets = self._detect_owlvit(image, cats)
         if dets:
             self._active_mode = 'owlvit_local'
-            return dets
-
-        dets = self._detect_gradio_rest(image, cats)
-        if dets:
             return dets
 
         self._active_mode = 'fallback_empty'
