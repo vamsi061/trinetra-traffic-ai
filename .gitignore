@@ -17,3 +17,8 @@ data/debug_*
 backend/__pycache__/
 *.log
 frontend/tsconfig.tsbuildinfo
+backend/.pytest_cache/
+backend/tests/
+backend/evaluate.py
+test_e2e.py
+SUMMARY.md
