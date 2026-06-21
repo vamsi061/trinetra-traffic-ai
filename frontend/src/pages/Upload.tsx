@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload as UploadIcon, AlertTriangle, CheckCircle, Search, Users, Shield, FileText, Eye, ThumbsUp, Bug, ChevronDown, ChevronUp, BarChart3, Activity, Presentation, Download, Cpu, Loader2 } from 'lucide-react'
+import { Upload as UploadIcon, AlertTriangle, CheckCircle, Search, Users, Shield, FileText, Eye, ThumbsUp, Bug, ChevronDown, ChevronUp, BarChart3, Activity, Presentation, Download, Cpu, Loader2, Key } from 'lucide-react'
 import { uploadImage, getEvidenceUrl, getEvidenceReportUrl, getDetectionEngines, checkOwlvitCompat, downloadOwlvitModel } from '../api/client'
 import type { DetectResponse, ReliabilityBadge, DetectionEngine, OwlVitCompat, OwlVitDownloadResult } from '../api/client'
 
@@ -223,26 +223,40 @@ function DetectionEngineSelector({
         })}
       </div>
 
-      {/* Conditional: HF token input for LocateAnything */}
+      {/* Conditional: HF token input for LocateAnything — optional if already stored */}
       {selectedEngine === 'locateanything' && (
         <div className="mb-4 p-4 rounded-lg bg-[#0d1225] border border-trinetra-border">
-          <label className="block text-xs font-medium text-trinetra-muted mb-2">
-            HuggingFace API Token <span className="text-red-400">*</span>
+          <label className="block text-xs font-medium text-trinetra-muted mb-2 flex items-center gap-2">
+            <Key className="w-3 h-3" />
+            HuggingFace API Token
+            {engine?.token_set ? (
+              <span className="text-green-500 text-[11px] flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" /> Configured in Engine Configuration
+              </span>
+            ) : (
+              <span className="text-yellow-500 text-[11px]">Required — set in sidebar Engine Configuration</span>
+            )}
           </label>
+          {engine?.token_set ? (
+            <p className="text-[11px] text-trinetra-muted">
+              Token is already stored on the server. Enter a different token below to override for this request.
+            </p>
+          ) : (
+            <p className="text-[11px] text-red-400 mb-2">
+              No token configured. Go to the <strong>Engine Configuration</strong> in the sidebar to set one, or enter below for this request only.
+            </p>
+          )}
           <input
             type="password"
             value={hfToken}
             onChange={e => onHfTokenChange(e.target.value)}
-            placeholder="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            placeholder={engine?.token_set ? 'Override token (optional)' : 'hf_...'}
             className="w-full px-3 py-2 rounded-lg bg-[#1a2040] border border-trinetra-border text-white text-sm placeholder-trinetra-muted/50 focus:outline-none focus:border-red-500/50"
           />
           <p className="text-[10px] text-trinetra-muted mt-1">
-            Get your free token at{' '}
+            Get a free token at{' '}
             <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer"
                className="text-blue-400 underline">huggingface.co/settings/tokens</a>
-          </p>
-          <p className="text-[10px] text-yellow-500 mt-1">
-            The token is sent with this request only and is not stored.
           </p>
         </div>
       )}
@@ -315,11 +329,11 @@ function DetectionEngineSelector({
         </div>
       )}
 
-      {/* Analyze button */}
+      {/* Analyze button — only block if locateanything AND no token anywhere */}
       {hasFile && (
         <button
           onClick={onAnalyze}
-          disabled={loading || (selectedEngine === 'locateanything' && !hfToken)}
+          disabled={loading || (selectedEngine === 'locateanything' && !hfToken && !engine?.token_set)}
           className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-red-500/10 text-red-300 border border-red-500/30 rounded-xl hover:bg-red-500/20 transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
