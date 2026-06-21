@@ -475,6 +475,9 @@ async def detect_violations(file: UploadFile = File(...)):
     else:
         reliability_override = None
 
+    # Detector model diagnostics
+    detection_model_info = detector.get_model_info()
+
     # Helmet model diagnostics
     helmet_service = get_helmet_service()
     helmet_model_info = helmet_service.get_model_info()
@@ -496,6 +499,7 @@ async def detect_violations(file: UploadFile = File(...)):
         "motorcycle_riders": motorcycle_riders,
         "compliance_status": compliance_status,
         "compliance_reason": compliance_reason,
+        "detection_model": detection_model_info,
         "helmet_model": helmet_model_info,
         "violations": [
             {

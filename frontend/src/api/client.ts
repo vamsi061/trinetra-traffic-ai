@@ -72,6 +72,7 @@ export interface DetectResponse {
   crowded_scene?: boolean
   compliance_status?: string
   compliance_reason?: string
+  detection_model?: { active_mode: string; gradio_available: boolean; owlvit_available: boolean; yolo_available: boolean; gradio_clients: number }
   helmet_model?: { loaded: boolean; model_name: string; classes: Record<number, string> }
   helmet_non_compliance_count?: number
   ai_review_recommended?: boolean

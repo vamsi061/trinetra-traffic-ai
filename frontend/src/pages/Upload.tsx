@@ -204,6 +204,21 @@ export default function Upload() {
             <h1 className="text-2xl font-bold text-white">TRINETRA AI</h1>
             <p className="text-trinetra-muted text-sm">AI-Powered Traffic Enforcement Intelligence Platform</p>
           </div>
+          {result?.detection_model && (
+            <div className="mt-1 flex items-center gap-2">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1a2040] text-trinetra-muted border border-trinetra-border">
+                {result.detection_model.active_mode === 'yolo_fallback' ? 'YOLOv8' :
+                 result.detection_model.active_mode === 'owlvit_local' ? 'OwlViT' :
+                 result.detection_model.active_mode?.startsWith('locateanything') ? 'LocateAnything' :
+                 result.detection_model.active_mode || 'YOLOv8'}
+              </span>
+              {result.helmet_model?.model_name && (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#1a2040] text-trinetra-muted border border-trinetra-border">
+                  {result.helmet_model.model_name}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         {result && !loading && (
           <button
@@ -497,6 +512,36 @@ export default function Upload() {
                 <FileText className="w-4 h-4" />
                 Download Evidence Report (PDF)
               </a>
+            </div>
+          )}
+
+          {/* Detection Engine Info */}
+          {result.detection_model && (
+            <div className="glass rounded-xl p-4">
+              <h3 className="text-xs font-semibold text-trinetra-muted mb-2 flex items-center gap-1.5">
+                <Activity className="w-3 h-3" /> Detection Engine
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                <span className={`text-xs font-mono px-2 py-1 rounded-full border ${
+                  result.detection_model.active_mode === 'yolo_fallback'
+                    ? 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30'
+                    : result.detection_model.active_mode?.startsWith('locateanything')
+                    ? 'bg-purple-500/10 text-purple-300 border-purple-500/30'
+                    : result.detection_model.active_mode === 'owlvit_local'
+                    ? 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+                    : 'bg-green-500/10 text-green-300 border-green-500/30'
+                }`}>
+                  {result.detection_model.active_mode === 'yolo_fallback' ? '🟡 YOLOv8 (Fallback)' :
+                   result.detection_model.active_mode?.startsWith('locateanything') ? '🟢 LocateAnything (Gradio)' :
+                   result.detection_model.active_mode === 'owlvit_local' ? '🔵 OwlViT (Local)' :
+                   result.detection_model.active_mode || '⚪ Unknown'}
+                </span>
+                {result.helmet_model?.model_name && (
+                  <span className="text-xs font-mono px-2 py-1 rounded-full bg-[#1a2040] text-trinetra-muted border border-trinetra-border">
+                    Helmet: {result.helmet_model.model_name}
+                  </span>
+                )}
+              </div>
             </div>
           )}
 

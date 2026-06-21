@@ -5,7 +5,7 @@ Uses NVIDIA's LocateAnything (GroundingDINO + SAM) via Gradio API
 for zero-shot object detection with text prompts.
 
 Fallback chain:
-  1. LocateAnything Gradio API (https://nvidia-locateanything.hf.space)
+  1. LocateAnything Gradio API (multiple HF spaces)
   2. Local zero-shot model via transformers (OwlViT)
   3. YOLOv8n (ultralytics) — always works
 
@@ -35,11 +35,16 @@ import config
 
 logger = logging.getLogger(__name__)
 
-LOCATE_ANYTHING_SPACE = "nvidia/LocateAnything"
+# Multiple HF spaces to try (ordered by preference)
+LOCATE_ANYTHING_SPACES = [
+    "nvidia/LocateAnything",
+    "ByteDance/LocateAnything",
+]
+
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 
-# Default detection categories
-DEFAULT_CATEGORIES = "motorcycle, car, person, license plate, helmet, bus, truck"
+# Default detection categories (expanded for better zero-shot coverage)
+DEFAULT_CATEGORIES = "motorcycle, car, person, license plate, helmet, bus, truck, auto rickshaw, three wheeler, bicycle, traffic light"
 
 # COCO class mapping for YOLO fallback
 COCO_CLASSES = {
@@ -63,8 +68,8 @@ class LocateAnythingDetector:
         if self._initialized:
             return
         self._initialized = True
-        self._gradio_client = None
-        self._gradio_failed = False
+        self._gradio_clients = []
+        self._gradio_permanent_fail = False
         self._owl_pipeline = None
         self._yolo_model = None
         self._active_mode = None
@@ -72,72 +77,82 @@ class LocateAnythingDetector:
     # ---------- Tier 1: LocateAnything Gradio API ----------
 
     def _init_gradio(self):
-        if not HAS_GRADIO or self._gradio_failed:
-            return False
-        try:
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(Client, LOCATE_ANYTHING_SPACE)
-                try:
-                    self._gradio_client = future.result(timeout=10)
-                    logger.info("LocateAnything: Gradio client initialized")
-                    return True
-                except concurrent.futures.TimeoutError:
-                    logger.warning("LocateAnything: Gradio client init timed out")
-                    self._gradio_failed = True
-                    return False
-        except Exception as e:
-            logger.warning(f"LocateAnything: Gradio init failed: {e}")
-            self._gradio_failed = True
+        if not HAS_GRADIO or self._gradio_permanent_fail:
             return False
 
+        for space_url in LOCATE_ANYTHING_SPACES:
+            try:
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(Client, space_url)
+                    try:
+                        client = future.result(timeout=60)
+                        self._gradio_clients.append(client)
+                        logger.info(f"LocateAnything: Gradio client initialized for {space_url}")
+                        return True
+                    except concurrent.futures.TimeoutError:
+                        logger.warning(f"LocateAnything: Gradio client init timed out for {space_url} (60s)")
+                        continue
+            except Exception as e:
+                logger.warning(f"LocateAnything: Gradio init failed for {space_url}: {e}")
+                continue
+
+        logger.warning("LocateAnything: all Gradio spaces failed to initialize")
+        self._gradio_permanent_fail = True
+        return False
+
     def _detect_gradio(self, image: np.ndarray, categories: str) -> list:
-        if self._gradio_client is None:
+        if not self._gradio_clients:
             if not self._init_gradio():
                 return []
 
         temp_path = None
-        try:
-            from tempfile import NamedTemporaryFile
-            tmpf = NamedTemporaryFile(suffix='.jpg', delete=False)
-            tmpf.close()
-            temp_path = tmpf.name
-            cv2.imwrite(temp_path, image)
+        for space_idx, client in enumerate(self._gradio_clients):
+            try:
+                from tempfile import NamedTemporaryFile
+                tmpf = NamedTemporaryFile(suffix='.jpg', delete=False)
+                tmpf.close()
+                temp_path = tmpf.name
+                cv2.imwrite(temp_path, image)
 
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(
-                    self._gradio_client.predict,
-                    'Image',
-                    handle_file(temp_path),
-                    None,
-                    'Detection',
-                    categories or DEFAULT_CATEGORIES,
-                    'hybrid',
-                    0.7, 0.9, 20, None, None, 4,
-                    api_name='/run_inference',
-                )
-                try:
-                    result = future.result(timeout=20)
-                except concurrent.futures.TimeoutError:
-                    logger.warning("LocateAnything: Gradio API timed out (20s)")
-                    return []
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        client.predict,
+                        'Image',
+                        handle_file(temp_path),
+                        None,
+                        'Detection',
+                        categories or DEFAULT_CATEGORIES,
+                        'hybrid',
+                        0.7, 0.9, 20, None, None, 4,
+                        api_name='/run_inference',
+                    )
+                    try:
+                        result = future.result(timeout=120)
+                    except concurrent.futures.TimeoutError:
+                        logger.warning(f"LocateAnything: Gradio API timed out (120s) for space {space_idx}")
+                        continue
 
-            if result and len(result) >= 3:
-                meta = result[2]
-                if isinstance(meta, dict) and meta.get('success') and 'detections' in meta:
-                    return self._format_gradio_detections(meta['detections'], image.shape)
+                if result and len(result) >= 3:
+                    meta = result[2]
+                    if isinstance(meta, dict) and meta.get('success') and 'detections' in meta:
+                        dets = self._format_gradio_detections(meta['detections'], image.shape)
+                        if dets:
+                            self._active_mode = f'locateanything_api_{LOCATE_ANYTHING_SPACES[space_idx].split("/")[-1]}'
+                            return dets
+                continue
+            except Exception as e:
+                logger.warning(f"LocateAnything: Gradio inference failed for space {space_idx}: {e}")
+                continue
+            finally:
+                if temp_path and os.path.exists(temp_path):
+                    try:
+                        os.unlink(temp_path)
+                    except OSError:
+                        pass
 
-            return []
-        except Exception as e:
-            logger.warning(f"LocateAnything: Gradio inference failed: {e}")
-            return []
-        finally:
-            if temp_path and os.path.exists(temp_path):
-                try:
-                    os.unlink(temp_path)
-                except OSError:
-                    pass
+        return []
 
     def _format_gradio_detections(self, raw_detections: dict, img_shape) -> list:
         """Convert LocateAnything detection format to our standard format."""
@@ -171,6 +186,7 @@ class LocateAnythingDetector:
         mapping = {
             'person': 0, 'bicycle': 1, 'car': 2, 'motorcycle': 3,
             'bus': 5, 'truck': 7, 'license plate': 99, 'helmet': 98,
+            'auto rickshaw': 2, 'three wheeler': 2,
         }
         return mapping.get(label.lower().strip(), -1)
 
@@ -185,12 +201,12 @@ class LocateAnythingDetector:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(__import__, 'transformers')
                     try:
-                        future.result(timeout=20)
+                        future.result(timeout=30)
                         from transformers import pipeline
                         HAS_TRANSFORMERS = True
                         logger.info("LocateAnything: transformers loaded")
                     except concurrent.futures.TimeoutError:
-                        logger.warning("LocateAnything: transformers import timed out (20s)")
+                        logger.warning("LocateAnything: transformers import timed out (30s)")
                         HAS_TRANSFORMERS = False
             except Exception:
                 HAS_TRANSFORMERS = False
@@ -276,28 +292,30 @@ class LocateAnythingDetector:
         """Detect objects in image using best available method.
 
         Fallback chain:
-          1. LocateAnything Gradio API
+          1. LocateAnything Gradio API (multiple HF spaces, long timeout)
           2. Local OwlViT (transformers)
           3. YOLOv8
 
         Args:
             image: BGR numpy array (OpenCV format)
-            categories: Comma-separated text prompts (default: motorcycle, car, ...)
+            categories: Comma-separated text prompts
 
         Returns:
             List of dicts with keys: bbox, confidence, class_id, label
         """
         cats = categories or DEFAULT_CATEGORIES
 
-        # Tier 1: LocateAnything API
-        if not self._gradio_failed and (self._gradio_client is not None or HAS_GRADIO):
+        # Tier 1: LocateAnything API (retry once on first call)
+        if HAS_GRADIO and not self._gradio_permanent_fail:
             dets = self._detect_gradio(image, cats)
             if dets:
-                self._active_mode = 'locateanything_api'
                 return dets
+            # Don't permanently give up — next request may succeed
+            if self._gradio_permanent_fail:
+                logger.info("LocateAnything: Gradio permanently unavailable, skipping in future")
 
         # Tier 2: Local zero-shot model
-        if HAS_TRANSFORMERS and (self._owl_pipeline is not None or HAS_TRANSFORMERS):
+        if HAS_TRANSFORMERS or not _tried_transformers:
             dets = self._detect_owlvit(image, cats)
             if dets:
                 self._active_mode = 'owlvit_local'
@@ -308,6 +326,16 @@ class LocateAnythingDetector:
         self._active_mode = 'yolo_fallback'
         return dets
 
+    def get_model_info(self) -> dict:
+        """Return diagnostic info about the active detection model."""
+        return {
+            'active_mode': self.get_active_mode(),
+            'gradio_available': HAS_GRADIO and not self._gradio_permanent_fail,
+            'owlvit_available': HAS_TRANSFORMERS,
+            'yolo_available': True,
+            'gradio_clients': len(self._gradio_clients),
+        }
+
     def filter_vehicles(self, detections: list) -> list:
         vehicles = []
         for det in detections:
@@ -316,7 +344,7 @@ class LocateAnythingDetector:
             if cls_id in config.VEHICLE_CLASSES:
                 det['vehicle_type'] = config.VEHICLE_CLASSES.get(cls_id, 'vehicle')
                 vehicles.append(det)
-            elif label in ('car', 'motorcycle', 'bus', 'truck', 'vehicle'):
+            elif label in ('car', 'motorcycle', 'bus', 'truck', 'vehicle', 'auto rickshaw', 'three wheeler'):
                 det['vehicle_type'] = label
                 vehicles.append(det)
         return vehicles
