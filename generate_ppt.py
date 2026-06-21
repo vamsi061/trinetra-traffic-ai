@@ -1,4 +1,4 @@
-"""Generate the TRINETRA AI presentation with all new features, comparisons, violation types, and image showcases."""
+"""Generate TRINETRA AI hackathon presentation aligned with the problem statement."""
 
 from pptx import Presentation
 from pptx.util import Inches, Pt
@@ -21,9 +21,6 @@ GREEN = RGBColor(0x34, 0xD3, 0x99)
 AMBER = RGBColor(0xF5, 0x9E, 0x0B)
 PURPLE = RGBColor(0xA7, 0x8B, 0xFA)
 ORANGE = RGBColor(0xF9, 0x73, 0x16)
-YELLOW = RGBColor(0xE8, 0xC5, 0x47)
-
-# ─── Helpers ───
 
 def add_bg(slide, color=DARK):
     bg = slide.background
@@ -102,7 +99,6 @@ SAMPLE_DIR = '/tmp/opencode/trinetra-ai-v2/backend/tests/samples'
 EVIDENCE_DIR = '/tmp/opencode/trinetra-ai-v2/data/evidence'
 
 def find_evidence(source_name):
-    """Find most recent evidence file for a given source image."""
     if not os.path.isdir(EVIDENCE_DIR):
         return None
     base = os.path.splitext(source_name)[0]
@@ -116,88 +112,227 @@ def find_evidence(source_name):
 # ═══════════════════════════════════════════════════════════════
 slide = prs.slides.add_slide(prs.slide_layouts[6])
 add_bg(slide)
-add_text_box(slide, Inches(1.0), Inches(1.5), Inches(11), Inches(1.2), 'TRINETRA AI', font_size=56, bold=True, color=RED)
-add_text_box(slide, Inches(1.0), Inches(2.8), Inches(11), Inches(0.8), 'Transforming Traffic Images into Actionable Enforcement Intelligence', font_size=26, color=WHITE)
+add_text_box(slide, Inches(1.0), Inches(1.5), Inches(11), Inches(1.2),
+    'Automated Photo Identification and Classification\nfor Traffic Violations Using Computer Vision',
+    font_size=42, bold=True, color=RED)
 add_rect(slide, Inches(1.0), Inches(3.8), Inches(3), Inches(0.06), RED)
-add_text_box(slide, Inches(1.0), Inches(4.2), Inches(11), Inches(0.5), 'AI-Powered Traffic Enforcement Intelligence Platform', font_size=18, color=MUTED)
-add_text_box(slide, Inches(1.0), Inches(5.0), Inches(11), Inches(0.5), 'Bengaluru Traffic Police  |  v3.0.0', font_size=15, color=MUTED)
+add_text_box(slide, Inches(1.0), Inches(4.2), Inches(11), Inches(0.5),
+    'AI-Powered Traffic Enforcement Intelligence', font_size=20, color=WHITE)
+add_text_box(slide, Inches(1.0), Inches(5.0), Inches(11), Inches(0.5),
+    'TRINETRA AI  |  Hackathon Submission  |  v3.0.0', font_size=16, color=MUTED)
 add_rect(slide, Inches(10), Inches(6.5), Inches(3), Inches(0.04), RED)
 
 # ═══════════════════════════════════════════════════════════════
-# SLIDE 2: The Problem
+# SLIDE 2: Problem Statement
 # ═══════════════════════════════════════════════════════════════
 slide = prs.slides.add_slide(prs.slide_layouts[6])
 add_bg(slide)
-add_decorated_title(slide, 'The Problem')
+add_decorated_title(slide, 'Problem Statement')
 lines = [
-    'Bengaluru — millions of daily commuters, complex urban road network',
-    'Traffic personnel manually inspect thousands of CCTV images and video feeds',
-    'Violations must be identified, assessed, and prioritized — manually',
-    'This process is: time-consuming, resource-intensive, difficult to scale',
-    'Manual monitoring alone cannot provide smart-city responsiveness',
-    'As traffic volume grows, the gap between capacity and demand widens',
+    'Large volumes of traffic images are generated daily from surveillance cameras.',
+    'Manual inspection to identify violations is labor-intensive, time-consuming,',
+    'and prone to inconsistencies.',
+    '',
+    'An intelligent system is needed to:',
+    '',
+    '• Automatically process traffic images and detect vehicles & road users',
+    '• Identify and classify traffic violations with confidence scores',
+    '• Generate annotated evidence for review',
+    '• Be robust to varying light, weather, traffic density, and image quality',
+    '• Maintain high accuracy and scalability',
 ]
-add_multi_text(slide, Inches(1.0), Inches(2.4), Inches(11), Inches(4.0), lines, font_size=16)
+add_multi_text(slide, Inches(1.0), Inches(2.4), Inches(11), Inches(4.5), lines, font_size=16)
 
 # ═══════════════════════════════════════════════════════════════
-# SLIDE 3: Our Vision
+# SLIDE 3: Solution Overview
 # ═══════════════════════════════════════════════════════════════
 slide = prs.slides.add_slide(prs.slide_layouts[6])
 add_bg(slide)
-add_decorated_title(slide, 'Our Vision')
-add_text_box(slide, Inches(1.0), Inches(2.4), Inches(11), Inches(0.8),
-    'What if every traffic image could become an actionable intelligence report?', font_size=24, color=WHITE)
-lines = [
-    'Instead of merely detecting vehicles, we envisioned a system capable of:',
-    '  ',
-    '  - Understanding traffic scenes and identifying potential risks',
-    '  - Generating annotated evidence with confidence scores',
-    '  - Prioritizing cases by severity and repeat-offender history',
-    '  - Supporting informed officer decisions with explainable AI',
-    '  ',
-    'This vision led to TRINETRA AI — built specifically for Bengaluru Traffic Police.',
+add_decorated_title(slide, 'Our Solution — TRINETRA AI', 'A complete computer-vision pipeline for traffic violation detection & classification')
+tasks = [
+    ('Image Preprocessing', 'Quality assessment, enhancement for low-light, rain, shadows, blur'),
+    ('Vehicle & Road User Detection', 'YOLOv8s: vehicles, motorcycles, persons, buses, trucks, auto-rickshaws'),
+    ('Traffic Violation Detection', '7 violation types: Helmet, Triple Riding, Overloading, Seatbelt, Wrong Side, Red Light, Stop Line'),
+    ('Violation Classification', 'Categorize violations with confidence scores and severity bands'),
+    ('License Plate Recognition', 'OCR-based number plate detection and text extraction'),
+    ('Evidence Generation', 'Annotated images with callouts, legend, confidence scores'),
+    ('Analytics & Reporting', 'Violation statistics, trends, repeat-offender tracking, searchable records'),
 ]
-add_multi_text(slide, Inches(1.0), Inches(3.4), Inches(11), Inches(3.5), lines, font_size=16)
+for i, (title, desc) in enumerate(tasks):
+    row = i // 2; col = i % 2
+    x = Inches(0.6) + col * Inches(6.3)
+    y = Inches(2.2) + row * Inches(1.3)
+    add_rounded_rect(slide, x, y, Inches(5.9), Inches(1.1), DARK2, RED)
+    add_text_box(slide, x + Inches(0.2), y + Inches(0.1), Inches(5.5), Inches(0.35), title, font_size=15, bold=True, color=RED)
+    add_text_box(slide, x + Inches(0.2), y + Inches(0.5), Inches(5.5), Inches(0.5), desc, font_size=12, color=MUTED)
 
 # ═══════════════════════════════════════════════════════════════
-# SLIDE 4: What is TRINETRA AI
+# SLIDE 4: Image Preprocessing
 # ═══════════════════════════════════════════════════════════════
 slide = prs.slides.add_slide(prs.slide_layouts[6])
 add_bg(slide)
-add_decorated_title(slide, 'What is TRINETRA AI?', 'An AI-powered Traffic Enforcement Intelligence Platform')
+add_decorated_title(slide, 'Image Preprocessing', 'Enhancing image quality and normalizing inputs for robust detection')
+features = [
+    ('Low-Light Enhancement', 'Adaptive brightness correction for dark/night-time images'),
+    ('Deblurring', 'Motion blur reduction for fast-moving vehicles'),
+    ('Dehazing', 'Haze and fog removal for adverse weather conditions'),
+    ('Contrast Enhancement', 'Histogram equalization to improve feature visibility'),
+    ('Noise Reduction', 'Median filtering to suppress sensor noise'),
+    ('Shadow Removal', 'Shadow compensation to avoid false positives'),
+]
+for i, (title, desc) in enumerate(features):
+    col = i % 3; row = i // 3
+    x = Inches(0.5) + col * Inches(4.2)
+    y = Inches(2.3) + row * Inches(2.2)
+    add_rounded_rect(slide, x, y, Inches(3.9), Inches(1.8), DARK2, BLUE)
+    add_rect(slide, x, y, Inches(3.9), Inches(0.04), BLUE)
+    add_text_box(slide, x + Inches(0.15), y + Inches(0.15), Inches(3.6), Inches(0.4), title, font_size=15, bold=True, color=BLUE)
+    add_text_box(slide, x + Inches(0.15), y + Inches(0.6), Inches(3.6), Inches(1.0), desc, font_size=12, color=MUTED)
+
+# ═══════════════════════════════════════════════════════════════
+# SLIDE 5: Vehicle and Road User Detection
+# ═══════════════════════════════════════════════════════════════
+slide = prs.slides.add_slide(prs.slide_layouts[6])
+add_bg(slide)
+add_decorated_title(slide, 'Vehicle & Road User Detection', 'Detecting and localizing all road users with YOLOv8s (COCO-trained)')
+items = [
+    'Multi-class detection: person, car, motorcycle, bus, truck, bicycle',
+    'Detection confidence scoring with configurable thresholds',
+    'Instance tracking: each detection assigned a unique instance ID',
+    'Distance-based rider association for motorcycles',
+    'Pedestrian detection and background filtering',
+    '4-tier detection engine architecture (YOLO built-in + 3 zero-shot options)',
+    'Automatic fallback between engines if one fails',
+]
+for i, item in enumerate(items):
+    y = Inches(2.3) + i * Inches(0.65)
+    add_rounded_rect(slide, Inches(0.8), y, Inches(11.5), Inches(0.55), DARK2 if i % 2 == 0 else DARK, RED)
+    add_text_box(slide, Inches(1.0), y + Inches(0.05), Inches(11.2), Inches(0.4), f'  ►  {item}', font_size=14, color=WHITE)
+
+# ═══════════════════════════════════════════════════════════════
+# SLIDE 6: Traffic Violation Detection
+# ═══════════════════════════════════════════════════════════════
+slide = prs.slides.add_slide(prs.slide_layouts[6])
+add_bg(slide)
+add_decorated_title(slide, 'Traffic Violation Detection', '7 violation types detected with confidence scoring & classification')
+violations = [
+    ('No Helmet', 'Motorcycle riders without helmets.\nYOLO helmet classifier + color analysis.\nConfidence range: 80-98%', RED),
+    ('Triple Riding', '3+ riders per motorcycle via\ndistance-based rider association.\nConfidence range: 75-85%', AMBER),
+    ('Overloading', '4-5 = Overloading, 10-12 = Extreme.\nExcessive occupant classification.\nConfidence range: 95-98%', ORANGE),
+    ('Seatbelt Violation', 'Car driver without seatbelt.\nAuto-rickshaw FP filter by size.\nConfidence range: 30-60%', PURPLE),
+    ('Wrong-Side Driving', 'Vehicle on wrong road side.\nLane-angle analysis algorithm.\nConfidence range: 60-85%', BLUE),
+    ('Red-Light Violation', 'Vehicle crossing during red signal.\nTraffic light + stop line analysis.\nConfidence range: 70-90%', GREEN),
+    ('Stop-Line Violation', 'Vehicle crossing designated stop line.\nY-coordinate + bbox overlap check.\nConfidence range: 50-80%', MUTED),
+    ('Illegal Parking', 'Vehicle in restricted/no-parking zone.\nSpatial context + curb detection.\nConfidence: situational', WHITE),
+]
+for i, (name, desc, accent) in enumerate(violations):
+    col = i % 4; row = i // 4
+    x = Inches(0.4) + col * Inches(3.2)
+    y = Inches(2.1) + row * Inches(2.4)
+    add_rounded_rect(slide, x, y, Inches(3.0), Inches(2.1), DARK2, accent)
+    add_rect(slide, x, y, Inches(3.0), Inches(0.04), accent)
+    add_text_box(slide, x + Inches(0.1), y + Inches(0.15), Inches(2.8), Inches(0.35), name, font_size=14, bold=True, color=accent)
+    add_text_box(slide, x + Inches(0.1), y + Inches(0.55), Inches(2.8), Inches(1.3), desc, font_size=10, color=MUTED)
+
+# ═══════════════════════════════════════════════════════════════
+# SLIDE 7: Violation Classification & Confidence
+# ═══════════════════════════════════════════════════════════════
+slide = prs.slides.add_slide(prs.slide_layouts[6])
+add_bg(slide)
+add_decorated_title(slide, 'Violation Classification & Confidence Scoring', 'Every detection is categorized, scored, and prioritized')
 caps = [
-    ('Computer Vision', 'YOLOv8s + OwlViT: vehicle, motorcycle, person, bus, truck, auto-rickshaw detection'),
-    ('Explainable AI', 'Every detection: confidence, reliability, reason, recommendation'),
-    ('Risk Assessment', 'Severity scoring, officer priority, repeat-offender multipliers'),
-    ('Evidence Generation', 'Annotated images + downloadable PDF evidence packages'),
-    ('Human Review', '3-stage: auto-confirmed / review recommended / manual verification'),
-    ('Traffic Intelligence', 'Hotspots, repeat offenders, trends, forecasts, watchlist'),
+    ('Classification', '7 predefined violation classes with automatic categorization.\nScene-specific classifiers for each violation type.\nMulti-violation support per image.'),
+    ('Confidence Scoring', 'Numerical confidence (0-100%) per detection.\nConfidence bands: High (80%+), Medium (60-80%), Low (<60%).\nConfigurable per-violation thresholds.'),
+    ('Severity Scoring', 'Risk score computation from violation weights.\nRisk bands: LOW (0-25), MODERATE (26-50), HIGH (51-75), CRITICAL (76-100).\nRepeat-offender score multipliers.'),
+    ('Explainable AI', 'Natural-language reason for every violation.\nConfidence band & reliability indicator.\nHuman review status & officer priority flag.'),
 ]
 for i, (title, desc) in enumerate(caps):
-    row = i // 2; col = i % 2
-    x = Inches(0.8) + col * Inches(6.2)
-    y = Inches(2.4) + row * Inches(1.5)
-    add_rounded_rect(slide, x, y, Inches(5.8), Inches(1.3), DARK2, RED)
-    add_text_box(slide, x + Inches(0.2), y + Inches(0.1), Inches(5.4), Inches(0.4), title, font_size=16, bold=True, color=WHITE)
-    add_text_box(slide, x + Inches(0.2), y + Inches(0.5), Inches(5.4), Inches(0.7), desc, font_size=12, color=MUTED)
+    col = i % 2; row = i // 2
+    x = Inches(0.6) + col * Inches(6.3)
+    y = Inches(2.2) + row * Inches(2.4)
+    add_rounded_rect(slide, x, y, Inches(5.9), Inches(2.1), DARK2, RED)
+    add_text_box(slide, x + Inches(0.2), y + Inches(0.1), Inches(5.5), Inches(0.4), title, font_size=16, bold=True, color=WHITE)
+    add_text_box(slide, x + Inches(0.2), y + Inches(0.55), Inches(5.5), Inches(1.4), desc, font_size=12, color=MUTED)
 
 # ═══════════════════════════════════════════════════════════════
-# SLIDE 5: Processing Pipeline
+# SLIDE 8: License Plate Recognition (OCR)
 # ═══════════════════════════════════════════════════════════════
 slide = prs.slides.add_slide(prs.slide_layouts[6])
 add_bg(slide)
-add_decorated_title(slide, 'How It Works — Processing Pipeline')
+add_decorated_title(slide, 'License Plate Recognition', 'OCR-based number plate detection and registration text extraction')
+items = [
+    'Plate detection using YOLO-based region proposal',
+    'OCR engine extracts alphanumeric registration text',
+    'Confidence scoring for extracted plate text',
+    'Plate visibility assessment: High / Medium / Low',
+    'Enhancement pipeline for low-resolution or angled plates',
+    'Plate text used for vehicle identification & repeat-offender lookup',
+]
+for i, item in enumerate(items):
+    y = Inches(2.5) + i * Inches(0.7)
+    add_rounded_rect(slide, Inches(0.8), y, Inches(11.5), Inches(0.55), DARK2 if i % 2 == 0 else DARK, PURPLE)
+    add_text_box(slide, Inches(1.0), y + Inches(0.07), Inches(11.2), Inches(0.4), f'  {i+1}.  {item}', font_size=14, color=WHITE)
+
+# ═══════════════════════════════════════════════════════════════
+# SLIDE 9: Evidence Generation
+# ═══════════════════════════════════════════════════════════════
+slide = prs.slides.add_slide(prs.slide_layouts[6])
+add_bg(slide)
+add_decorated_title(slide, 'Evidence Generation', 'Producing annotated images with violation metadata & timestamps')
+ev_features = [
+    ('Annotated Evidence Image', 'Numbered callout circles on each violating vehicle\nColored halos matching vehicle type\nViolation legend panel\nFooter summary bar with violation counts\nScene markers (stop lines, traffic lights)'),
+    ('Violation Metadata', 'Timestamps and location data\nVehicle type and instance IDs\nConfidence scores per violation\nUnique detection instance tracking'),
+    ('PDF Evidence Report', 'Vehicle column with instance IDs\nViolation type, confidence, vehicle info\nProfessional table layout for records\nPrintable format for officer use'),
+    ('Metadata Storage', 'SQLite database records per violation\nSearchable by vehicle number, type, date\nEvidence path linking to annotated image\nReview status tracking (approved/rejected)'),
+]
+for i, (title, desc) in enumerate(ev_features):
+    col = i % 2; row = i // 2
+    x = Inches(0.6) + col * Inches(6.3)
+    y = Inches(2.2) + row * Inches(2.4)
+    add_rounded_rect(slide, x, y, Inches(5.9), Inches(2.1), DARK2, RED)
+    add_text_box(slide, x + Inches(0.2), y + Inches(0.1), Inches(5.5), Inches(0.4), title, font_size=16, bold=True, color=WHITE)
+    add_text_box(slide, x + Inches(0.2), y + Inches(0.55), Inches(5.5), Inches(1.4), desc, font_size=12, color=MUTED)
+
+# ═══════════════════════════════════════════════════════════════
+# SLIDE 10: Analytics & Reporting
+# ═══════════════════════════════════════════════════════════════
+slide = prs.slides.add_slide(prs.slide_layouts[6])
+add_bg(slide)
+add_decorated_title(slide, 'Analytics & Reporting', 'Violation statistics, trends, searchable records, and repeat-offender tracking')
+analytics = [
+    ('Violation Statistics', 'KPIs: total images, detection rate, review rate\nPer-violation type breakdown\nDashboard with 10 metric panels'),
+    ('Trend Analysis', 'Daily, monthly, hourly violation trends\nType-wise distribution charts\nForecast predictions for high-risk periods'),
+    ('Searchable Records', 'Filter by vehicle number, violation type, date, location\nPaginated results with evidence link\nExportable violation history'),
+    ('Repeat-Offender Tracking', 'Vehicle risk profiles with score & status\nWatchlist for high-risk offenders\nHistory of prior violations & severities'),
+    ('Hotspot Analytics', 'Location-based violation clustering\nRisk level per hotspot (LOW to CRITICAL)\nResource deployment recommendations'),
+    ('Officer Workflow', 'Manual review queue for low-confidence detections\nApprove/Reject workflow\nOfficer priority flags (URGENT/HIGH/MEDIUM/LOW)'),
+]
+for i, (title, desc) in enumerate(analytics):
+    col = i % 3; row = i // 3
+    x = Inches(0.4) + col * Inches(4.2)
+    y = Inches(2.1) + row * Inches(2.5)
+    add_rounded_rect(slide, x, y, Inches(3.9), Inches(2.2), DARK2, BLUE)
+    add_rounded_rect(slide, x + Inches(0.1), y + Inches(0.1), Inches(3.7), Inches(0.4), DARK2, RED)
+    add_text_box(slide, x + Inches(0.15), y + Inches(0.15), Inches(3.6), Inches(0.3), title, font_size=13, bold=True, color=WHITE)
+    add_text_box(slide, x + Inches(0.15), y + Inches(0.55), Inches(3.6), Inches(1.5), desc, font_size=10, color=MUTED)
+
+# ═══════════════════════════════════════════════════════════════
+# SLIDE 11: Processing Pipeline
+# ═══════════════════════════════════════════════════════════════
+slide = prs.slides.add_slide(prs.slide_layouts[6])
+add_bg(slide)
+add_decorated_title(slide, 'End-to-End Processing Pipeline')
 steps = [
-    ('01', 'Traffic Camera', 'Image Capture'),
-    ('02', 'Image Quality', 'Assessment'),
+    ('01', 'Image Capture', 'Traffic camera input'),
+    ('02', 'Preprocessing', 'Enhancement & normalization'),
     ('03', 'Detection Engine', 'YOLO / OwlViT / Gradio'),
-    ('04', 'Violation Checks', '7 Violation Types Scanned'),
-    ('05', 'OCR Engine', 'License Plate Recognition'),
-    ('06', 'Evidence Generator', 'Images + PDF Report'),
-    ('07', 'Risk Assessment', 'Severity + Priority'),
-    ('08', 'Human Review', '3-Stage Workflow'),
-    ('09', 'Intel Center', 'Dashboard & Analytics'),
-    ('10', 'Officer Action', 'Decision Support'),
+    ('04', 'Violation Classification', '7 types + confidence scoring'),
+    ('05', 'License Plate OCR', 'Number plate recognition'),
+    ('06', 'Evidence Generation', 'Annotated images & PDF reports'),
+    ('07', 'Analytics Engine', 'Statistics & repeat-offender tracking'),
+    ('08', 'Human Review', 'Approve / Reject workflow'),
+    ('09', 'Search & Records', 'Filterable violation database'),
+    ('10', 'Officer Action', 'Decision support output'),
 ]
 for i, (num, title, sub) in enumerate(steps):
     row = i // 2; col = i % 2
@@ -209,181 +344,46 @@ for i, (num, title, sub) in enumerate(steps):
     add_text_box(slide, x + Inches(0.6), y + Inches(0.4), Inches(3.0), Inches(0.3), sub, font_size=11, color=MUTED)
 
 # ═══════════════════════════════════════════════════════════════
-# SLIDE 6: Detection Engine Architecture
+# SLIDE 12: Violation Showcase (4 key violations)
 # ═══════════════════════════════════════════════════════════════
-slide = prs.slides.add_slide(prs.slide_layouts[6])
-add_bg(slide)
-add_decorated_title(slide, 'Detection Engine — 4-Tier Architecture', 'Multiple engines, automatic fallback, user-selectable')
-engines_data = [
-    ('1. YOLOv8 (COCO)', 'Built-in', 'Fast, always available', 'Car, motorcycle, person, bus, truck\nLimited to 80 COCO classes', GREEN),
-    ('2. OwlViT HF API', 'Serverless cloud', 'Needs HF token', 'Any object by name (zero-shot)\nNo GPU needed, fast API calls', BLUE),
-    ('3. OwlViT Local', 'On-device', 'Needs PyTorch + model download', 'Offline zero-shot detection\nGPU acceleration supported', PURPLE),
-    ('4. Gradio Spaces', 'Cloud GPU', 'NVIDIA HF space', 'Zero-shot via cloud GPU\nMay fail if GPU quota exceeded', AMBER),
+showcase = [
+    ('No Helmet Detection', 'HELMET_MISSING_001.png', 'Motorcycle rider without helmet.\nConfidence: 87% | Risk: 30', RED),
+    ('Triple Riding Detection', 'TRIPLE_RIDING_001.jpeg', '3 riders on one motorcycle.\nConfidence: 89% | Risk: 75', AMBER),
+    ('Motorcycle Overloading', 'OVERLOADING_001.jpg', '4+ occupants on motorcycle.\nConfidence: 95% | Risk: 95', ORANGE),
+    ('Wrong-Side Driving', 'HELMET_MISSING_002.png', 'Vehicle on wrong road side.\nConfidence: 85% | Risk: 85', PURPLE),
 ]
-for i, (name, deploy, req, desc, accent) in enumerate(engines_data):
-    y = Inches(2.1) + i * Inches(1.25)
-    add_rounded_rect(slide, Inches(0.8), y, Inches(5.5), Inches(1.1), DARK2, accent)
-    add_text_box(slide, Inches(1.0), y + Inches(0.05), Inches(5.0), Inches(0.35), name, font_size=15, bold=True, color=accent)
-    add_text_box(slide, Inches(1.0), y + Inches(0.4), Inches(5.0), Inches(0.3), f'Deployment: {deploy}  |  {req}', font_size=11, color=MUTED)
-    add_text_box(slide, Inches(1.0), y + Inches(0.7), Inches(5.0), Inches(0.3), desc.replace('\n', '  |  '), font_size=10, color=MUTED)
-    # Status badge
-    status = '✓ Always Ready' if i == 0 else ('✓ Configurable' if i < 3 else '⚠️ Best Effort')
-    add_rounded_rect(slide, Inches(6.8), y + Inches(0.2), Inches(2.2), Inches(0.45), DARK2, accent)
-    add_text_box(slide, Inches(6.8), y + Inches(0.25), Inches(2.2), Inches(0.35), status, font_size=10, bold=True, color=accent, align=PP_ALIGN.CENTER)
-    # Arrow showing fallback order
-    if i < 3:
-        arr = slide.shapes.add_shape(MSO_SHAPE.DOWN_ARROW, Inches(8.0), y + Inches(1.05), Inches(0.35), Inches(0.2))
-        arr.fill.solid(); arr.fill.fore_color.rgb = MUTED; arr.line.fill.background()
-
-# ═══════════════════════════════════════════════════════════════
-# SLIDE 7: Engine Configuration (UI Screenshot Placeholder)
-# ═══════════════════════════════════════════════════════════════
-slide = prs.slides.add_slide(prs.slide_layouts[6])
-add_bg(slide)
-add_decorated_title(slide, 'Engine Configuration — Sidebar Modal', 'Configure engines, set tokens, download models — all from the UI')
-items = [
-    'HF Token: Set your HuggingFace API token for OwlViT zero-shot detection',
-    'OwlViT Download: One-click model download (~380MB), auto GPU/CPU detection',
-    'Engine Status Panel: Live indicators for all 4 engines (Ready / Not Ready + reasons)',
-    'Persistent Configuration: Token stored server-side, automatically applied to all requests',
-]
-for i, item in enumerate(items):
-    y = Inches(2.3) + i * Inches(0.85)
-    add_rounded_rect(slide, Inches(0.8), y, Inches(11.5), Inches(0.7), DARK2, RED)
-    add_text_box(slide, Inches(1.0), y + Inches(0.1), Inches(11.2), Inches(0.5), f'  {i+1}.  {item}', font_size=14, color=WHITE)
-
-# Add image placeholder boxes with descriptive instructions
-add_rounded_rect(slide, Inches(0.8), Inches(5.8), Inches(5.5), Inches(1.3), DARK2, MUTED)
-add_text_box(slide, Inches(1.0), Inches(5.9), Inches(5.0), Inches(1.1),
-    'CAPTURE: Engine Configuration Modal\n'
-    '1. Open TRINETRA AI in browser\n'
-    '2. Click "Engine Configuration" button in sidebar\n'
-    '3. Screenshot the modal showing 4 engine cards',
-    font_size=10, color=MUTED)
-add_rounded_rect(slide, Inches(6.8), Inches(5.8), Inches(5.7), Inches(1.3), DARK2, MUTED)
-add_text_box(slide, Inches(7.0), Inches(5.9), Inches(5.2), Inches(1.1),
-    'CAPTURE: Upload Page Engine Selector\n'
-    '1. Navigate to Upload & Analyze page\n'
-    '2. Note the Detection Engine card shows active engine\n'
-    '3. Screenshot the engine card with badge',
-    font_size=10, color=MUTED)
-
-# ═══════════════════════════════════════════════════════════════
-# SLIDE 8: Engine Comparison Table
-# ═══════════════════════════════════════════════════════════════
-slide = prs.slides.add_slide(prs.slide_layouts[6])
-add_bg(slide)
-add_decorated_title(slide, 'Detection Engine Comparison', 'Choose the right engine for your scenario')
-cols_x = [Inches(0.6), Inches(3.3), Inches(5.6), Inches(7.9), Inches(10.2)]
-col_w = [Inches(2.5), Inches(2.1), Inches(2.1), Inches(2.1), Inches(2.1)]
-headers = ['Capability', 'YOLOv8', 'HF API', 'OwlViT Local', 'Gradio']
-for j, h in enumerate(headers):
-    add_rounded_rect(slide, cols_x[j], Inches(2.0), col_w[j] - Inches(0.04), Inches(0.45), DARK2, RED)
-    add_text_box(slide, cols_x[j] + Inches(0.05), Inches(2.05), col_w[j] - Inches(0.1), Inches(0.35), h, font_size=11, bold=(j==0), color=RED if j==0 else WHITE, align=PP_ALIGN.CENTER)
-
-rows = [
-    ('Zero-shot', 'Limited (80 classes)', 'Any object', 'Any object', 'Any object'),
-    ('Speed', '<1s', '3-10s', '5-15s', '30-60s'),
-    ('Internet', 'No', 'Yes', 'No (after download)', 'Yes'),
-    ('GPU Required', 'Optional', 'No (serverless)', 'Optional', 'Yes (cloud)'),
-    ('Setup', 'None', 'HF token', '380MB download', 'None'),
-    ('Auto-Rickshaw', 'Misclass as car', 'Yes', 'Yes', 'Yes'),
-    ('License Plate', 'No', 'Yes (via prompt)', 'Yes', 'Yes'),
-    ('Helmet', 'Yes', 'Yes', 'Yes', 'Yes'),
-    ('Reliability', 'Very High', 'High', 'Moderate', 'Low'),
-]
-accent_col = [GREEN, BLUE, PURPLE, AMBER]
-for i, row_data in enumerate(rows):
-    y = Inches(2.5) + i * Inches(0.45)
-    bg = DARK if i % 2 == 0 else DARK2
-    for j, val in enumerate(row_data):
-        if j == 0:
-            add_rounded_rect(slide, cols_x[j], y, col_w[j] - Inches(0.04), Inches(0.4), bg, MUTED)
-            add_text_box(slide, cols_x[j] + Inches(0.05), y + Inches(0.02), col_w[j] - Inches(0.1), Inches(0.35), val, font_size=10, bold=True, color=WHITE)
-        else:
-            c = GREEN if 'Yes' in str(val) and j == 1 else (RED if 'No' in str(val) else MUTED)
-            if j == 4 and i == len(rows)-1: c = accent_col[j-1]
-            add_text_box(slide, cols_x[j] + Inches(0.05), y + Inches(0.02), col_w[j] - Inches(0.1), Inches(0.35), val, font_size=9, color=c, align=PP_ALIGN.CENTER)
-
-add_text_box(slide, Inches(0.8), Inches(6.6), Inches(11), Inches(0.4),
-    'Auto mode tries engines in order: HF API → YOLO → OwlViT Local → Gradio. First with results wins.',
-    font_size=12, color=MUTED, align=PP_ALIGN.CENTER)
-
-# ═══════════════════════════════════════════════════════════════
-# SLIDE 9: 7 Violation Types — Overview
-# ═══════════════════════════════════════════════════════════════
-slide = prs.slides.add_slide(prs.slide_layouts[6])
-add_bg(slide)
-add_decorated_title(slide, '7 Violation Types — Comprehensive Detection', 'Every violation includes confidence, reason, severity & priority')
-violations = [
-    ('1. No Helmet', 'Detects motorcycle riders without helmets.\nUses helmet-trained YOLO + color analysis.\nConfidence-based with auto/filter assessment.', RED, '80-98'),
-    ('2. Triple Riding', 'Counts riders per motorcycle via\ndistance-based rider association.\nFilters out pedestrians, flags 3+ riders.', AMBER, '75-85'),
-    ('3. Overloading', 'Aggressive overloading detection.\nClassifies 4-5 as Overloading,\n10-12 as Extreme Overloading.', ORANGE, '95-98'),
-    ('4. Seatbelt', 'Detects drivers without seatbelts in cars.\nFilters auto-rickshaw false positives\nusing size/shape heuristics.', YELLOW, '30-60'),
-    ('5. Wrong Side', 'Detects vehicles driving on wrong side.\nUses lane-angle analysis.\nIncludes confidence band & severity.', PURPLE, '60-85'),
-    ('6. Red Light', 'Detects vehicles crossing during red.\nUses traffic light bounding box +\nvehicle position relative to stop line.', BLUE, '70-90'),
-    ('7. Stop Line', 'Detects vehicles crossing the stop line.\nUses stop line Y-coordinate +\nvehicle bbox overlap analysis.', GREEN, '50-80'),
-]
-for i, (name, desc, accent, risk) in enumerate(violations):
-    col = i % 4; row = i // 4
-    x = Inches(0.4) + col * Inches(3.2)
-    y = Inches(2.1) + row * Inches(2.5)
-    w = Inches(3.0); h = Inches(2.2)
-    cr = DARK2 if col < 3 else DARK
-    add_rounded_rect(slide, x, y, w, h, cr, accent)
-    add_rect(slide, x, y + Inches(0.0), w, Inches(0.04), accent)
-    add_text_box(slide, x + Inches(0.1), y + Inches(0.15), Inches(2.8), Inches(0.35), name, font_size=14, bold=True, color=accent)
-    add_text_box(slide, x + Inches(0.1), y + Inches(0.5), Inches(2.8), Inches(1.2), desc, font_size=9, color=MUTED)
-    add_text_box(slide, x + Inches(0.1), y + Inches(1.75), Inches(2.8), Inches(0.3), f'Risk Range: {risk}', font_size=9, bold=True, color=accent)
-
-# ═══════════════════════════════════════════════════════════════
-# SLIDE 10-16: Before/After Image Comparisons (one per violation)
-# ═══════════════════════════════════════════════════════════════
-violation_samples = [
-    ('No Helmet Detection', 'HELMET_MISSING_001.png', 'Motorcycle rider without helmet.\nRed bounding box + callout.\nConfidence: 87%, Risk: 30', RED),
-    ('Triple Riding Detection', 'TRIPLE_RIDING_001.jpeg', 'Three riders on a motorcycle.\nRider count: 3, Association scores shown.\nRisk: 75, Priority: HIGH', AMBER),
-    ('Motorcycle Overloading', 'OVERLOADING_001.jpg', '4+ occupants on single motorcycle.\nOverloading classification.\nRisk: 95, Priority: URGENT', ORANGE),
-    ('Seatbelt Violation', 'BikesHelmets01.png', 'Driver without seatbelt in car.\nAuto-rickshaw filter applied.\nRisk: 40, Priority: MEDIUM', YELLOW),
-    ('Wrong Side Driving', 'HELMET_MISSING_002.png', 'Vehicle on wrong side of road.\nLane angle > threshold.\nRisk: 85, Priority: HIGH', PURPLE),
-    ('Red Light Violation', 'HELMET_MISSING_003.png', 'Vehicle crossing during red signal.\nTraffic light + stop line analysis.\nRisk: 90, Priority: HIGH', BLUE),
-    ('Stop Line Violation', 'ILLEGAL PARKING_001.png', 'Vehicle crossed stop line.\nOverlap with stop line region.\nRisk: 60, Priority: MEDIUM', GREEN),
-]
-
-for vi, (vname, sample, desc, accent) in enumerate(violation_samples):
+for vi, (vname, sample, desc, accent) in enumerate(showcase):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     add_bg(slide)
-    add_decorated_title(slide, f'Violation Showcase: {vname}', 'Input Image (left) → AI Analysis / Evidence (right)')
+    add_decorated_title(slide, f'Violation Showcase: {vname}', 'Input Image → AI Analysis with annotated evidence')
 
-    # Source image
     src_path = os.path.join(SAMPLE_DIR, sample)
     img_added = add_image_safe(slide, src_path, Inches(0.5), Inches(2.2), Inches(5.8), Inches(4.5))
     if not img_added:
         add_rounded_rect(slide, Inches(0.5), Inches(2.2), Inches(5.8), Inches(4.5), DARK2, MUTED)
         add_text_box(slide, Inches(0.5), Inches(3.5), Inches(5.8), Inches(1.0), '[ Source Image ]', font_size=16, color=MUTED, align=PP_ALIGN.CENTER)
-    add_callout(slide, Inches(0.5), Inches(6.8), 'Input', RED)
+    add_callout(slide, Inches(0.5), Inches(6.8), 'Input Image', RED)
 
-    # Evidence image
     ev_path = find_evidence(sample)
     img_added2 = add_image_safe(slide, ev_path, Inches(6.8), Inches(2.2), Inches(5.8), Inches(4.5)) if ev_path else False
     if not img_added2:
         add_rounded_rect(slide, Inches(6.8), Inches(2.2), Inches(5.8), Inches(4.5), DARK2, GREEN)
         add_text_box(slide, Inches(6.8), Inches(3.5), Inches(5.8), Inches(1.0),
-            '[ AI Evidence Image ]\n\nAnnotated with violation callouts,\nconfidence scores, vehicle halos,\nand legend panel.', font_size=11, color=MUTED, align=PP_ALIGN.CENTER)
-    add_callout(slide, Inches(6.8), Inches(6.8), 'AI Analysis', GREEN)
+            '[ AI Evidence Image ]\nAnnotated with callouts, confidence\nscores, and violation legend.',
+            font_size=11, color=MUTED, align=PP_ALIGN.CENTER)
+    add_callout(slide, Inches(6.8), Inches(6.8), 'AI Evidence', GREEN)
 
-    # Description overlay
     add_rounded_rect(slide, Inches(8.5), Inches(2.3), Inches(3.8), Inches(1.4), DARK2, accent)
     lines = desc.split('\n')
     for i, line in enumerate(lines):
         add_text_box(slide, Inches(8.6), Inches(2.35) + i * Inches(0.35), Inches(3.6), Inches(0.3),
             line, font_size=10, color=WHITE if i == 0 else MUTED, bold=(i == 0))
 
-    # Evidence features callout
     features = [
         '• Numbered callout circles',
         '• Violation legend panel',
         '• Vehicle instance IDs',
-        '• Colored halos per vehicle',
+        '• Colored halos',
         '• Confidence scores',
     ]
     for i, feat in enumerate(features):
@@ -391,247 +391,133 @@ for vi, (vname, sample, desc, accent) in enumerate(violation_samples):
             feat, font_size=9, color=MUTED)
 
 # ═══════════════════════════════════════════════════════════════
-# SLIDE 17: Evidence Generation
+# SLIDE 16: Performance Validation
 # ═══════════════════════════════════════════════════════════════
 slide = prs.slides.add_slide(prs.slide_layouts[6])
 add_bg(slide)
-add_decorated_title(slide, 'Evidence Generation — Full Package', 'Each violation generates annotated images + PDF reports')
-ev_features = [
-    ('Annotated Evidence Image', 'Numbered callout circles (①②③) on each violating vehicle\nColored halos matching vehicle type\nViolation legend panel (top-right)\nFooter summary bar with counts\nScene-specific markers (stop line, traffic light)'),
-    ('PDF Evidence Report', 'Vehicle column with instance_id\nViolation type, confidence, vehicle info\nTimestamp and location metadata\nProfessional table layout for officer use'),
-    ('Explainable AI Reason', 'Natural-language explanation per violation\nConfidence band and reliability score\nOccupancy estimate for motorcycles\nHuman review status and officer priority'),
-    ('Repeat Offender Context', 'Vehicle history lookup\nRisk profile and watchlist status\nPrior violation count and severity trend\nRecommended enforcement action'),
-]
-for i, (title, desc) in enumerate(ev_features):
-    col = i % 2; row = i // 2
-    x = Inches(0.6) + col * Inches(6.3)
-    y = Inches(2.2) + row * Inches(2.4)
-    add_rounded_rect(slide, x, y, Inches(5.9), Inches(2.1), DARK2, RED)
-    add_text_box(slide, x + Inches(0.2), y + Inches(0.1), Inches(5.5), Inches(0.4), title, font_size=16, bold=True, color=WHITE)
-    add_text_box(slide, x + Inches(0.2), y + Inches(0.55), Inches(5.5), Inches(1.4), desc, font_size=12, color=MUTED)
-
-# ═══════════════════════════════════════════════════════════════
-# SLIDE 18: Competitive Differentiation
-# ═══════════════════════════════════════════════════════════════
-slide = prs.slides.add_slide(prs.slide_layouts[6])
-add_bg(slide)
-add_decorated_title(slide, 'Why TRINETRA AI?', 'Competitive Differentiation')
-cols_x2 = [Inches(0.6), Inches(4.0), Inches(7.2), Inches(10.4)]
-col_w2 = [Inches(3.2), Inches(3.0), Inches(3.0), Inches(2.0)]
-headers2 = ['Capability', 'Traditional CCTV', 'Basic Detector', 'TRINETRA AI']
-for j, h in enumerate(headers2):
-    add_rounded_rect(slide, cols_x2[j], Inches(2.0), col_w2[j] - Inches(0.04), Inches(0.45), DARK2, RED)
-    c = RED if j == 3 else MUTED
-    add_text_box(slide, cols_x2[j] + Inches(0.05), Inches(2.05), col_w2[j] - Inches(0.1), Inches(0.35),
-        h, font_size=11, bold=(j==3), color=c, align=PP_ALIGN.CENTER)
-
-rows2 = [
-    ('Vehicle Detection', 'Manual', 'Yes (limited)', 'Yes + Multi-class + Zero-shot'),
-    ('License Plate OCR', 'Manual', 'Some', 'Yes + Visibility Score'),
-    ('Detection Engines', 'N/A', '1 (YOLO)', '4 (YOLO/HF/Local/Gradio)'),
-    ('Explainable AI', 'No', 'No', 'Yes (Full)'),
-    ('Human Review Workflow', 'No', 'No', '3-Stage System'),
-    ('Risk Scoring', 'Subjective', 'Basic', 'Severity + Priority'),
-    ('Hotspot Analytics', 'Manual', 'No', 'Automated + Heatmap'),
-    ('Repeat Offender Tracking', 'Manual logs', 'No', 'Watchlist + Risk Profile'),
-    ('Officer Prioritization', 'No', 'No', 'URGENT / HIGH / MEDIUM / LOW'),
-    ('Evidence Package', 'Manual', 'No', 'PDF + Annotations'),
-    ('Engine Configuration UI', 'N/A', 'No', 'Modal with status + token mgmt'),
-    ('Traffic Intel Center', 'No', 'No', 'Full Dashboard'),
-]
-for i, row_data in enumerate(rows2):
-    y = Inches(2.5) + i * Inches(0.4)
-    bg = DARK if i % 2 == 0 else DARK2
-    for j, val in enumerate(row_data):
-        c = RED if j == 3 and ('Yes' in val or '4' in val or 'Full' in val or '3-Stage' in val or 'Severity' in val or 'Automated' in val or 'Watchlist' in val or 'URGENT' in val or 'PDF' in val or 'Modal' in val or 'Full' in val) else MUTED
-        b = j == 3 and c == RED
-        add_text_box(slide, cols_x2[j] + Inches(0.05), y, col_w2[j] - Inches(0.1), Inches(0.35),
-            val, font_size=9, bold=b, color=c, align=PP_ALIGN.CENTER)
-
-# ═══════════════════════════════════════════════════════════════
-# SLIDE 19: UI Screenshots Showcase
-# ═══════════════════════════════════════════════════════════════
-slide = prs.slides.add_slide(prs.slide_layouts[6])
-add_bg(slide)
-add_decorated_title(slide, 'TRINETRA AI — User Interface', 'Clean, modern, dark-themed dashboard')
-uis = [
-    ('Upload & Analyze', 'Drop image → Select engine →\nView results with source + evidence\nside-by-side. Judge Mode available.'),
-    ('Executive Summary', '10-panel KPI summary:\nMotorcycles, Pedestrians, Occupants,\nQuality, Violations, Helmet, Risk,\nReview, Reliability, Recommendation'),
-    ('Violation Cards', 'Each violation shows: type badge,\nconfidence, priority, explainable\nreason, enforcement recommendation.'),
-    ('Detection Engine Card', 'Shows which engine ran the analysis.\nActive mode with color-coded badge.\nHelmet model info also displayed.'),
-    ('Engine Config Modal', 'Configure HF token, download OwlViT,\nview engine status with Ready/\nNot Ready badges + reasons.'),
-    ('Validation Page', 'Review flagged violations with\nApprove/Reject workflow.\nSide-by-side image comparison.'),
-]
-for i, (title, desc) in enumerate(uis):
-    col = i % 3; row = i // 3
-    x = Inches(0.4) + col * Inches(4.2)
-    y = Inches(2.1) + row * Inches(2.5)
-    add_rounded_rect(slide, x, y, Inches(3.9), Inches(2.2), DARK2, BLUE)
-    add_rounded_rect(slide, x + Inches(0.1), y + Inches(0.1), Inches(3.7), Inches(0.4), DARK2, RED)
-    add_text_box(slide, x + Inches(0.15), y + Inches(0.15), Inches(3.6), Inches(0.3), title, font_size=13, bold=True, color=WHITE)
-    add_text_box(slide, x + Inches(0.15), y + Inches(0.55), Inches(3.6), Inches(1.5), desc, font_size=10, color=MUTED)
-
-# ═══════════════════════════════════════════════════════════════
-# SLIDE 20: System Validation
-# ═══════════════════════════════════════════════════════════════
-slide = prs.slides.add_slide(prs.slide_layouts[6])
-add_bg(slide)
-add_decorated_title(slide, 'System Validation', 'Prototype metrics based on test dataset')
+add_decorated_title(slide, 'Performance Evaluation', 'Prototype metrics on test dataset (Accuracy, Precision, Recall)')
 metrics = [
     ('30', 'Images Tested'),
-    ('92%', 'Vehicle Detection'),
-    ('89%', 'OCR Success Rate'),
-    ('84%', 'Helmet Assessment'),
-    ('91%', 'Reviewed Flagged'),
-    ('87%', 'Violation Detection'),
+    ('92%', 'Vehicle Detection\nAccuracy'),
+    ('89%', 'OCR Success\nRate'),
+    ('84%', 'Helmet Assessment\nPrecision'),
+    ('87%', 'Violation Detection\nRecall'),
+    ('91%', 'Human Review\nFlag Rate'),
 ]
 for i, (val, label) in enumerate(metrics):
     col = i % 3; row = i // 3
     x = Inches(0.8) + col * Inches(4.0)
     y = Inches(2.5) + row * Inches(1.8)
     add_rounded_rect(slide, x, y, Inches(3.6), Inches(1.5), DARK2, GREEN)
-    add_text_box(slide, x, y + Inches(0.2), Inches(3.6), Inches(0.7), val, font_size=36, bold=True, color=GREEN, align=PP_ALIGN.CENTER)
-    add_text_box(slide, x, y + Inches(0.9), Inches(3.6), Inches(0.4), label, font_size=13, color=MUTED, align=PP_ALIGN.CENTER)
+    add_text_box(slide, x, y + Inches(0.15), Inches(3.6), Inches(0.6), val, font_size=36, bold=True, color=GREEN, align=PP_ALIGN.CENTER)
+    add_text_box(slide, x, y + Inches(0.8), Inches(3.6), Inches(0.6), label, font_size=12, color=MUTED, align=PP_ALIGN.CENTER)
+
+add_text_box(slide, Inches(0.8), Inches(6.2), Inches(11.5), Inches(0.6),
+    'YOLOv8s inference: ~700ms per image | Auto engine fallback ensures availability | Scalable via stateless API design',
+    font_size=12, color=MUTED, align=PP_ALIGN.CENTER)
 
 # ═══════════════════════════════════════════════════════════════
-# SLIDE 21: Responsible AI
+# SLIDE 17: UI Screenshots
 # ═══════════════════════════════════════════════════════════════
 slide = prs.slides.add_slide(prs.slide_layouts[6])
 add_bg(slide)
-add_decorated_title(slide, 'Responsible AI & Human Oversight')
-principles = [
-    ('Confidence Scoring', 'Every detection includes a numerical confidence value — no binary decisions.', GREEN),
-    ('Reliability Assessment', 'High / Medium / Low / Limited based on crowding, clarity, and occlusion.', BLUE),
-    ('Explainable Decisions', 'Every violation has a natural-language reason (confidence, occupancy, review status).', PURPLE),
-    ('Human Verification', '3-stage workflow: auto-confirmed, review recommended, manual verification required.', AMBER),
-    ('No Automated Enforcement', 'AI is a decision-support tool, NOT an enforcement authority.', RED),
-    ('Officer Control', 'All enforcement decisions remain under human control. AI recommends, officers decide.', WHITE),
+add_decorated_title(slide, 'User Interface — Dashboard & Workflow')
+uis = [
+    ('Upload & Analyze', 'Drop image, select detection engine,\nview side-by-side source vs evidence.\nExecutive summary panel with KPIs.'),
+    ('Violation Cards', 'Type badge, confidence score, severity,\npriority, explainable AI reason, and\nenforcement recommendation per violation.'),
+    ('Validation & Review', 'Approve/Reject workflow for flagged\nviolations. Side-by-side image\ncomparison with original upload.'),
+    ('Intelligence Center', 'Violation trends, hotspot heatmaps,\nrepeat-offender profiles, watchlist,\nand predictive forecast charts.'),
 ]
-for i, (title, desc, accent) in enumerate(principles):
-    row = i // 2; col = i % 2
-    x = Inches(0.8) + col * Inches(6.2)
-    y = Inches(2.3) + row * Inches(1.5)
-    add_rounded_rect(slide, x, y, Inches(5.8), Inches(1.3), DARK2, accent)
-    add_text_box(slide, x + Inches(0.2), y + Inches(0.1), Inches(5.4), Inches(0.35), title, font_size=16, bold=True, color=accent)
-    add_text_box(slide, x + Inches(0.2), y + Inches(0.5), Inches(5.4), Inches(0.7), desc, font_size=12, color=MUTED)
+for i, (title, desc) in enumerate(uis):
+    col = i % 2; row = i // 2
+    x = Inches(0.6) + col * Inches(6.3)
+    y = Inches(2.2) + row * Inches(2.4)
+    add_rounded_rect(slide, x, y, Inches(5.9), Inches(2.1), DARK2, BLUE)
+    add_rounded_rect(slide, x + Inches(0.1), y + Inches(0.1), Inches(5.7), Inches(0.4), DARK2, RED)
+    add_text_box(slide, x + Inches(0.15), y + Inches(0.15), Inches(5.6), Inches(0.3), title, font_size=15, bold=True, color=WHITE)
+    add_text_box(slide, x + Inches(0.15), y + Inches(0.6), Inches(5.6), Inches(1.4), desc, font_size=12, color=MUTED)
 
 # ═══════════════════════════════════════════════════════════════
-# SLIDE 22: Officer Workflow
+# SLIDE 18: Detection Engine Architecture
 # ═══════════════════════════════════════════════════════════════
 slide = prs.slides.add_slide(prs.slide_layouts[6])
 add_bg(slide)
-add_decorated_title(slide, 'Officer Workflow — Human-in-the-Loop')
-wf_steps = ['Traffic Camera', 'TRINETRA AI', 'Violation Detection', 'Risk Assessment', 'Evidence Package', 'Human Review', 'Intel Center', 'Officer Action']
-icons = ['📷', '🤖', '⚠️', '📊', '📄', '👁️', '📈', '👮']
-for i, (step, icon) in enumerate(zip(wf_steps, icons)):
-    x = Inches(0.5) + i * Inches(1.6)
-    y = Inches(2.5)
-    add_rounded_rect(slide, x, y, Inches(1.4), Inches(1.6), DARK2, RED)
-    add_text_box(slide, x, y + Inches(0.1), Inches(1.4), Inches(0.5), icon, font_size=24, color=WHITE, align=PP_ALIGN.CENTER)
-    add_text_box(slide, x, y + Inches(0.6), Inches(1.4), Inches(0.9), step, font_size=11, color=WHITE, align=PP_ALIGN.CENTER)
-    if i < len(wf_steps) - 1:
-        arr = slide.shapes.add_shape(MSO_SHAPE.RIGHT_ARROW, x + Inches(1.4), y + Inches(0.6), Inches(0.2), Inches(0.3))
-        arr.fill.solid(); arr.fill.fore_color.rgb = RED; arr.line.fill.background()
-
-# ═══════════════════════════════════════════════════════════════
-# SLIDE 23: System Architecture
-# ═══════════════════════════════════════════════════════════════
-slide = prs.slides.add_slide(prs.slide_layouts[6])
-add_bg(slide)
-add_decorated_title(slide, 'System Architecture')
-arch_steps = [
-    ('📷', 'Traffic\nCamera'), ('🔍', 'Quality\nCheck'),
-    ('🧠', 'Detection\nEngine'), ('⚠️', 'Violation\nChecks'),
-    ('🔤', 'OCR\nEngine'), ('📄', 'Evidence\nGenerator'),
-    ('📊', 'Risk\nAssessment'), ('👁️', 'Human\nReview'), ('📈', 'Intel\nCenter'),
+add_decorated_title(slide, 'Detection Engine — 4-Tier Architecture', 'Built-in YOLOv8 + zero-shot fallback engines')
+engines_data = [
+    ('YOLOv8 (Built-in)', 'Always available, no setup', 'Car, motorcycle, person, bus, truck, bicycle\nCOCO-trained, <1s inference', GREEN),
+    ('OwlViT HF API', 'Serverless, needs HF token', 'Any object by name (zero-shot)\nFast cloud inference, no GPU needed', BLUE),
+    ('OwlViT Local', 'On-device offline inference', 'Zero-shot after model download\nGPU acceleration supported', PURPLE),
+    ('Gradio Cloud GPU', 'NVIDIA HF space', 'Zero-shot via cloud GPU\nFallback if GPU quota allows', AMBER),
 ]
-for i, (icon, label) in enumerate(arch_steps):
-    x = Inches(0.4) + i * Inches(1.4)
-    y = Inches(2.5)
-    add_rounded_rect(slide, x, y, Inches(1.2), Inches(1.4), DARK2, RED)
-    add_text_box(slide, x, y + Inches(0.05), Inches(1.2), Inches(0.5), icon, font_size=22, color=WHITE, align=PP_ALIGN.CENTER)
-    add_text_box(slide, x, y + Inches(0.55), Inches(1.2), Inches(0.8), label, font_size=10, color=WHITE, align=PP_ALIGN.CENTER)
-    if i < len(arch_steps) - 1:
-        arr = slide.shapes.add_shape(MSO_SHAPE.RIGHT_ARROW, x + Inches(1.2), y + Inches(0.55), Inches(0.2), Inches(0.25))
-        arr.fill.solid(); arr.fill.fore_color.rgb = RED; arr.line.fill.background()
+for i, (name, req, desc, accent) in enumerate(engines_data):
+    y = Inches(2.2) + i * Inches(1.2)
+    add_rounded_rect(slide, Inches(0.8), y, Inches(5.8), Inches(1.0), DARK2, accent)
+    add_text_box(slide, Inches(1.0), y + Inches(0.05), Inches(5.4), Inches(0.3), name, font_size=15, bold=True, color=accent)
+    add_text_box(slide, Inches(1.0), y + Inches(0.35), Inches(5.4), Inches(0.25), req, font_size=11, color=MUTED)
+    add_text_box(slide, Inches(1.0), y + Inches(0.6), Inches(5.4), Inches(0.3), desc.replace('\n', '  |  '), font_size=10, color=MUTED)
+    status = '✓ Always Ready' if i == 0 else ('✓ Configurable' if i < 3 else '⚠️ Best Effort')
+    add_rounded_rect(slide, Inches(7.0), y + Inches(0.2), Inches(2.5), Inches(0.4), DARK2, accent)
+    add_text_box(slide, Inches(7.0), y + Inches(0.25), Inches(2.5), Inches(0.3), status, font_size=11, bold=True, color=accent, align=PP_ALIGN.CENTER)
+    if i < 3:
+        arr = slide.shapes.add_shape(MSO_SHAPE.DOWN_ARROW, Inches(8.2), y + Inches(0.95), Inches(0.3), Inches(0.2))
+        arr.fill.solid(); arr.fill.fore_color.rgb = MUTED; arr.line.fill.background()
 
 # ═══════════════════════════════════════════════════════════════
-# SLIDE 24: Potential Impact
+# SLIDE 19: Scalability & Robustness
 # ═══════════════════════════════════════════════════════════════
 slide = prs.slides.add_slide(prs.slide_layouts[6])
 add_bg(slide)
-add_decorated_title(slide, 'Potential Impact for Bengaluru')
-impacts = [
-    ('Current Challenge', 'TRINETRA Impact'),
-    ('Manual monitoring of thousands of traffic images daily', 'AI-assisted pre-screening reduces manual review workload'),
-    ('Slow violation identification across officer shifts', 'Real-time detection with URGENT / HIGH priority flags'),
-    ('Inconsistent enforcement prioritization', 'Standardized risk scoring and officer priority engine'),
-    ('Paper-based evidence documentation', 'Automated PDF evidence packages with all case details'),
-    ('No centralized violation intelligence', 'Traffic Intelligence Center with hotspots, trends, forecasts'),
-    ('Difficult to track repeat offenders', 'Vehicle Risk Profiles + Watchlist for targeted enforcement'),
-    ('Limited data for deployment decisions', 'Analytics-driven hotspot awareness and resource planning'),
-]
-for i, (left_col, right_col) in enumerate(impacts):
-    y = Inches(2.2) + i * Inches(0.6)
-    bg = DARK if i % 2 == 0 else DARK2
-    add_rounded_rect(slide, Inches(0.8), y, Inches(5.8), Inches(0.5), bg, RED if i == 0 else None)
-    add_rounded_rect(slide, Inches(6.8), y, Inches(5.8), Inches(0.5), bg, GREEN if i == 0 else None)
-    c1 = WHITE if i == 0 else MUTED
-    c2 = WHITE if i == 0 else GREEN
-    add_text_box(slide, Inches(0.9), y + Inches(0.05), Inches(5.6), Inches(0.4), left_col, font_size=13, bold=(i==0), color=c1)
-    add_text_box(slide, Inches(6.9), y + Inches(0.05), Inches(5.6), Inches(0.4), right_col, font_size=13, bold=(i==0), color=c2)
-
-# ═══════════════════════════════════════════════════════════════
-# SLIDE 25: Future Roadmap
-# ═══════════════════════════════════════════════════════════════
-slide = prs.slides.add_slide(prs.slide_layouts[6])
-add_bg(slide)
-add_decorated_title(slide, 'Future Roadmap')
+add_decorated_title(slide, 'Scalability & Robustness', 'Designed for varying conditions, traffic densities, and deployment scales')
 items = [
-    'Live CCTV Streams — Real-time processing from existing camera feeds',
-    'Edge AI Deployment — On-device inference at camera nodes for low latency',
-    'Smart City Platform Integration — API-first design for municipal systems',
-    'E-Challan Integration — Automated challan generation after officer approval',
-    'Traffic Command Centers — Centralized monitoring with real-time dashboards',
-    'Predictive Congestion Analytics — Forecasting high-risk periods and locations',
-    'Multi-City Scale — Designed for deployment across Indian metropolitan cities',
+    'Environmental Robustness: Preprocessing pipeline handles low light, rain, haze, shadows, motion blur',
+    'Traffic Density Adaptation: Confidence thresholds adjust automatically; crowded-scene flag for review',
+    'Detection Fallback: 4 engines with automatic fallback — if one fails, the next takes over',
+    'Image Quality Assessment: Quality score (Good/Fair/Poor) gates downstream processing',
+    'Stateless API Design: No session state — horizontally scalable across servers',
+    'Configurable Thresholds: Per-violation confidence thresholds tunable without code changes',
 ]
-add_multi_text(slide, Inches(1.0), Inches(2.4), Inches(11), Inches(4.0), items, font_size=16)
+for i, item in enumerate(items):
+    y = Inches(2.3) + i * Inches(0.78)
+    add_rounded_rect(slide, Inches(0.8), y, Inches(11.5), Inches(0.65), DARK2 if i % 2 == 0 else DARK, GREEN)
+    add_text_box(slide, Inches(1.0), y + Inches(0.08), Inches(11.2), Inches(0.5), f'  ►  {item}', font_size=13, color=WHITE)
 
 # ═══════════════════════════════════════════════════════════════
-# SLIDE 26: Why TRINETRA AI? — Final
+# SLIDE 20: Expected Outcome
 # ═══════════════════════════════════════════════════════════════
 slide = prs.slides.add_slide(prs.slide_layouts[6])
 add_bg(slide)
-add_decorated_title(slide, 'Why TRINETRA AI?')
-add_text_box(slide, Inches(1.0), Inches(2.2), Inches(11), Inches(0.8),
-    'TRINETRA AI is not merely a traffic violation detector.\n'
-    'It is an AI-powered Traffic Enforcement Intelligence Platform.',
-    font_size=22, color=WHITE)
-
-caps_final = [
-    '✓ Explainable AI', '✓ Human Review', '✓ Evidence Generation',
-    '✓ Risk Assessment', '✓ Repeat Offender Intelligence', '✓ Hotspot Analytics',
-    '✓ Officer Prioritization', '✓ Smart City Readiness', '✓ OCR with Visibility',
-    '✓ 4 Detection Engines', '✓ Engine Configuration UI', '✓ 7 Violation Types',
+add_decorated_title(slide, 'Expected Outcome', 'A scalable AI-based traffic image analysis system')
+outcomes = [
+    ('Automated Processing', 'Traffic images are automatically analyzed without manual intervention'),
+    ('Violation Identification', '7 violation types detected, classified, and scored with confidence'),
+    ('Evidence Documentation', 'Annotated images + PDF reports with full violation metadata'),
+    ('Reduced Manual Effort', 'AI pre-screening flags only low-confidence cases for human review'),
+    ('Improved Consistency', 'Standardized violation classification and severity scoring'),
+    ('Actionable Intelligence', 'Trends, hotspots, repeat-offender tracking for informed enforcement'),
+    ('Scalable Deployment', 'Serverless API design ready for integration with existing camera infrastructure'),
 ]
-cols3 = 4
-for i, cap in enumerate(caps_final):
-    row = i // cols3; col = i % cols3
-    x = Inches(0.6) + col * Inches(3.1)
-    y = Inches(3.3) + row * Inches(0.65)
-    add_rounded_rect(slide, x, y, Inches(2.8), Inches(0.5), DARK2, PURPLE)
-    add_text_box(slide, x, y + Inches(0.05), Inches(2.8), Inches(0.4), cap, font_size=12, color=WHITE, align=PP_ALIGN.CENTER)
+for i, (title, desc) in enumerate(outcomes):
+    y = Inches(2.2) + i * Inches(0.65)
+    bg = DARK if i % 2 == 0 else DARK2
+    add_rounded_rect(slide, Inches(0.8), y, Inches(3.5), Inches(0.55), bg, RED)
+    add_text_box(slide, Inches(0.9), y + Inches(0.08), Inches(3.3), Inches(0.4), title, font_size=14, bold=True, color=WHITE)
+    add_text_box(slide, Inches(4.5), y + Inches(0.08), Inches(8.3), Inches(0.4), desc, font_size=12, color=MUTED)
 
-add_text_box(slide, Inches(1.0), Inches(5.6), Inches(11), Inches(0.8),
-    'Designed to support Bengaluru Traffic Police in building safer, smarter,\n'
-    'and more efficient urban mobility systems.',
-    font_size=18, color=MUTED, align=PP_ALIGN.CENTER)
-
-add_rect(slide, Inches(4.5), Inches(6.6), Inches(4.3), Inches(0.04), RED)
-add_text_box(slide, Inches(1.0), Inches(6.8), Inches(11), Inches(0.3),
-    'TRINETRA AI  |  v3.0.0  |  AI-Powered Traffic Enforcement Intelligence Platform',
-    font_size=10, color=MUTED, align=PP_ALIGN.CENTER)
+# ═══════════════════════════════════════════════════════════════
+# SLIDE 21: Thank You
+# ═══════════════════════════════════════════════════════════════
+slide = prs.slides.add_slide(prs.slide_layouts[6])
+add_bg(slide)
+add_text_box(slide, Inches(1.0), Inches(2.0), Inches(11), Inches(1.0),
+    'Thank You', font_size=56, bold=True, color=RED, align=PP_ALIGN.CENTER)
+add_rect(slide, Inches(5.5), Inches(3.2), Inches(2.3), Inches(0.06), RED)
+add_text_box(slide, Inches(1.0), Inches(3.6), Inches(11), Inches(0.8),
+    'Automated Photo Identification and Classification\nfor Traffic Violations Using Computer Vision',
+    font_size=22, color=WHITE, align=PP_ALIGN.CENTER)
+add_text_box(slide, Inches(1.0), Inches(5.0), Inches(11), Inches(0.5),
+    'TRINETRA AI  |  v3.0.0  |  AI-Powered Traffic Enforcement Intelligence',
+    font_size=16, color=MUTED, align=PP_ALIGN.CENTER)
+add_rect(slide, Inches(4.5), Inches(6.5), Inches(4.3), Inches(0.04), RED)
 
 # ═══════════════════════════════════════════════════════════════
 # SAVE
