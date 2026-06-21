@@ -382,12 +382,12 @@ class LocateAnythingDetector:
             return []
 
         try:
+            from PIL import Image
             img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            # Clean labels: remove "a "/"an " prefix for pipeline, keep both variants
+            pil_img = Image.fromarray(img_rgb)
             raw_labels = [c.strip() for c in categories.split(',')]
-            # Use clean labels (without articles) for the pipeline
             clean_labels = [re.sub(r'^(a|an)\s+', '', l, flags=re.IGNORECASE).strip() for l in raw_labels]
-            results = self._owl_pipeline(img_rgb, candidate_labels=clean_labels)
+            results = self._owl_pipeline(pil_img, candidate_labels=clean_labels)
 
             detections = []
             for r in results:
