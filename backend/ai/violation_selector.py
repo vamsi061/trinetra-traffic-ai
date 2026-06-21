@@ -1,30 +1,117 @@
-"""Violation Prioritization & False Positive Suppression for TRINETRA AI.
+"""Violation Prioritization & False Positive Suppression for TRINETRA AI v3.
 
 Pipeline:
   1. validate_violation_context — reject violations missing required scene evidence
-  2. calculate_evidence_score — rate each violation's evidential support
-  3. apply_confidence_threshold — <0.50 discard, 0.50-0.70 → Possible, >0.70 → Violation
-  4. rank_violations — by scene relevance + confidence + context score
-  5. select_primary — highest-ranked violation becomes the Primary Finding
-  6. suppress_secondary — hide low-scoring secondary violations behind review flag
+  2. environment_confidence_modifier — adjust confidence based on image quality
+  3. calculate_evidence_score — rate each violation's evidential support
+  4. apply_threshold — violation-specific thresholds + Florence context boost
+  5. rank_violations — by scene relevance + confidence + context score
+  6. select_primary — highest-ranked violation becomes the Primary Finding
+  7. suppress_secondary — hide low-scoring secondary violations behind review flag
 """
 
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Minimum evidence thresholds per violation type
-EVIDENCE_THRESHOLD = 0.50
-CONFIDENCE_FLOOR = 0.50
-POSSIBLE_CEILING = 0.70
+# ============================================================
+# FIX 5: Violation-specific confidence thresholds
+# ============================================================
+VIOLATION_THRESHOLDS = {
+    'NO_HELMET':                   {'floor': 0.50, 'possible_ceiling': 0.70},
+    'HELMET_ASSESSMENT_UNCERTAIN': {'floor': 0.35, 'possible_ceiling': 0.55},
+    'SEATBELT_VIOLATION':          {'floor': 0.70, 'possible_ceiling': 0.80},
+    'TRIPLE_RIDING':               {'floor': 0.50, 'possible_ceiling': 0.70},
+    'MOTORCYCLE_OVERLOADING':      {'floor': 0.50, 'possible_ceiling': 0.70},
+    'MOTORCYCLE_EXTREME_OVERLOADING': {'floor': 0.50, 'possible_ceiling': 0.70},
+    'POSSIBLE_ILLEGAL_PARKING':    {'floor': 0.65, 'possible_ceiling': 0.80},
+    'WRONG_SIDE_DRIVING':          {'floor': 0.80, 'possible_ceiling': 0.90},
+    'STOP_LINE_VIOLATION':         {'floor': 0.60, 'possible_ceiling': 0.75},
+    'RED_LIGHT_VIOLATION':         {'floor': 0.70, 'possible_ceiling': 0.80},
+}
 
-# Scene relevance keywords: maps violation type → Florence-2 narrative triggers
+DEFAULT_THRESHOLDS = {'floor': 0.50, 'possible_ceiling': 0.70}
+
+# Evidence score floor (applied uniformly)
+EVIDENCE_FLOOR = 0.30
+# Secondary suppression threshold
+EVIDENCE_THRESHOLD = 0.50
+
+# ============================================================
+# FIX 4: Environment-aware confidence modifiers
+# ============================================================
+ENVIRONMENT_MODIFIERS = {
+    'Low Light':   0.85,
+    'Fog/Haze':    0.85,
+    'Glare':       0.85,
+    'Blur':        0.80,
+    'Low Contrast': 0.90,
+    'Shadow':      0.85,
+    'Rain':        0.85,
+}
+
+# Compound discount: when multiple issues stack, apply diminishing returns
+ENVIRONMENT_STACKING = {
+    1: 1.0,     # single issue: use modifier directly
+    2: 0.85,    # two issues: 85% of the weaker modifier
+    3: 0.70,    # three issues: 70%
+    4: 0.55,    # four issues: 55%
+}
+
+
+def environment_confidence_modifier(confidence, quality_analysis):
+    """Adjust confidence based on image quality issues.
+
+    Args:
+        confidence: raw violation confidence
+        quality_analysis: dict from analyze_image_quality() or assess_quality()
+
+    Returns:
+        (adjusted_confidence: float, issues_found: list[str])
+    """
+    if not quality_analysis:
+        return confidence, []
+
+    issues = []
+    if isinstance(quality_analysis, dict):
+        issues = quality_analysis.get('issues', [])
+
+    if not issues:
+        return confidence, []
+
+    matched = []
+    for issue in issues:
+        modifier = ENVIRONMENT_MODIFIERS.get(issue)
+        if modifier is not None:
+            matched.append((issue, modifier))
+
+    if not matched:
+        return confidence, []
+
+    # Use the weakest modifier
+    weakest = min(m for _, m in matched)
+    n_issues = len(matched)
+
+    stacking = ENVIRONMENT_STACKING.get(n_issues, 0.40)
+    env_factor = weakest * stacking
+
+    adjusted = confidence * env_factor
+    adjusted = max(0.10, min(1.0, adjusted))
+
+    return adjusted, [issue for issue, _ in matched]
+
+
+# ============================================================
+# FIX 6: Florence context boost
+# ============================================================
 SCENE_KEYWORDS = {
     'POSSIBLE_ILLEGAL_PARKING': ['parked', 'parking', 'stationary', 'stopped',
                                   'curb', 'kerb', 'footpath', 'roadside',
                                   'no parking', 'parking zone', 'restricted'],
     'NO_HELMET': ['helmet', 'rider', 'motorcycle', 'scooter', 'without helmet',
                   'no helmet'],
+    'HELMET_ASSESSMENT_UNCERTAIN': ['helmet', 'rider', 'motorcycle'],
     'SEATBELT_VIOLATION': ['seatbelt', 'seat belt', 'car', 'driver', 'occupant',
                            'cabin', 'windscreen'],
     'TRIPLE_RIDING': ['triple', 'three', 'three people', 'three persons',
@@ -34,16 +121,15 @@ SCENE_KEYWORDS = {
     'RED_LIGHT_VIOLATION': ['red light', 'signal', 'traffic light'],
 }
 
-# Context prerequisites: what must exist in detections for each violation type
-#   all_of: every label must be present (AND)
-#   any_of: at least one label must be present (OR)
+# Context prerequisites
 CONTEXT_REQUIREMENTS = {
     'POSSIBLE_ILLEGAL_PARKING': {'any_of': ['car', 'motorcycle', 'truck', 'bus', 'person']},
     'NO_HELMET': {'all_of': ['motorcycle', 'person']},
+    'HELMET_ASSESSMENT_UNCERTAIN': {'all_of': ['motorcycle', 'person']},
     'SEATBELT_VIOLATION': {'all_of': ['car', 'person']},
     'TRIPLE_RIDING': {'all_of': ['motorcycle', 'person']},
     'STOP_LINE_VIOLATION': {},
-    'WRONG_SIDE_DRIVING': {},
+    'WRONG_SIDE_DRIVING': {'all_of': ['car', 'motorcycle', 'truck', 'bus']},
     'RED_LIGHT_VIOLATION': {'any_of': ['traffic light', 'car', 'motorcycle']},
     'MOTORCYCLE_OVERLOADING': {'all_of': ['motorcycle', 'person']},
     'MOTORCYCLE_EXTREME_OVERLOADING': {'all_of': ['motorcycle', 'person']},
@@ -52,39 +138,37 @@ CONTEXT_REQUIREMENTS = {
 # Evidence factor weights
 EVIDENCE_WEIGHTS = {
     'POSSIBLE_ILLEGAL_PARKING': {
-        'has_parking_context': 0.40,
-        'vehicle_large_enough': 0.25,
-        'scene_mentions_parking': 0.20,
-        'not_moving': 0.15,
+        'has_parking_context': 0.40, 'vehicle_large_enough': 0.25,
+        'scene_mentions_parking': 0.20, 'not_moving': 0.15,
     },
     'NO_HELMET': {
-        'has_motorcycle': 0.30,
-        'has_person': 0.30,
-        'model_available': 0.25,
-        'scene_mentions_rider': 0.15,
+        'has_motorcycle': 0.30, 'has_person': 0.30,
+        'model_available': 0.25, 'scene_mentions_rider': 0.15,
+    },
+    'HELMET_ASSESSMENT_UNCERTAIN': {
+        'has_motorcycle': 0.25, 'has_person': 0.25,
+        'hsv_suggested_absent': 0.30, 'scene_mentions_rider': 0.20,
     },
     'SEATBELT_VIOLATION': {
-        'has_car': 0.35,
-        'person_in_car': 0.35,
-        'cabin_visible': 0.20,
-        'scene_mentions_car': 0.10,
+        'has_car': 0.35, 'person_in_car': 0.35,
+        'cabin_visible': 0.20, 'scene_mentions_car': 0.10,
     },
     'TRIPLE_RIDING': {
-        'has_motorcycle': 0.30,
-        'rider_count_ge_3': 0.40,
-        'scene_mentions_overload': 0.15,
-        'association_confidence': 0.15,
+        'has_motorcycle': 0.30, 'rider_count_ge_3': 0.40,
+        'scene_mentions_overload': 0.15, 'association_confidence': 0.15,
     },
     'STOP_LINE_VIOLATION': {
-        'stop_line_detected': 0.40,
-        'vehicle_past_line': 0.35,
+        'stop_line_detected': 0.40, 'vehicle_past_line': 0.35,
         'scene_mentions_stop': 0.25,
+    },
+    'WRONG_SIDE_DRIVING': {
+        'lane_evidence': 0.35, 'motion_validated': 0.35,
+        'scene_mentions_wrong_side': 0.30,
     },
 }
 
 
 def _scene_relevance_boost(violation_type, narrative):
-    """Calculate scene relevance boost (0.0–0.25) from Florence-2 narrative."""
     if not narrative:
         return 0.0
     narrative_lower = narrative.lower()
@@ -98,7 +182,6 @@ def _scene_relevance_boost(violation_type, narrative):
 
 
 def _evidence_factors(violation, detections, scene_info):
-    """Calculate evidence score components for a violation."""
     vtype = violation['violation_type']
     weights = EVIDENCE_WEIGHTS.get(vtype, {})
     score = 0.0
@@ -110,25 +193,27 @@ def _evidence_factors(violation, detections, scene_info):
         has_context = any(kw in parking_context.lower()
                           for kw in ['parking', 'parked', 'roadside', 'footpath', 'curb', 'lane'])
         factors['has_parking_context'] = 1.0 if has_context else 0.0
-        factors['vehicle_large_enough'] = 0.8  # already passed size filter
+        factors['vehicle_large_enough'] = 0.8
         factors['scene_mentions_parking'] = 0.5 if _scene_relevance_boost(vtype, scene_info.get('narrative')) > 0 else 0.0
-        factors['not_moving'] = 1.0  # parking detector already filters moving
+        factors['not_moving'] = 1.0
 
     elif vtype == 'SEATBELT_VIOLATION':
-        has_car = 'car' in labels
-        has_person = 'person' in labels
-        factors['has_car'] = 1.0 if has_car else 0.0
+        factors['has_car'] = 1.0 if 'car' in labels else 0.0
         factors['person_in_car'] = 1.0 if violation.get('person_bbox') and violation.get('vehicle_bbox') else 0.0
-        factors['cabin_visible'] = 0.5  # proxy: no direct cabin detection
+        factors['cabin_visible'] = 0.5
         factors['scene_mentions_car'] = 0.5 if _scene_relevance_boost(vtype, scene_info.get('narrative')) > 0 else 0.0
 
     elif vtype == 'NO_HELMET':
-        has_mc = 'motorcycle' in labels
-        has_person = 'person' in labels
-        factors['has_motorcycle'] = 1.0 if has_mc else 0.0
-        factors['has_person'] = 1.0 if has_person else 0.0
+        factors['has_motorcycle'] = 1.0 if 'motorcycle' in labels else 0.0
+        factors['has_person'] = 1.0 if 'person' in labels else 0.0
         model_avail = violation.get('helmet_state') != 'HELMET_UNKNOWN'
         factors['model_available'] = 1.0 if model_avail else 0.0
+        factors['scene_mentions_rider'] = 0.5 if _scene_relevance_boost(vtype, scene_info.get('narrative')) > 0 else 0.0
+
+    elif vtype == 'HELMET_ASSESSMENT_UNCERTAIN':
+        factors['has_motorcycle'] = 1.0 if 'motorcycle' in labels else 0.0
+        factors['has_person'] = 1.0 if 'person' in labels else 0.0
+        factors['hsv_suggested_absent'] = 0.7
         factors['scene_mentions_rider'] = 0.5 if _scene_relevance_boost(vtype, scene_info.get('narrative')) > 0 else 0.0
 
     elif vtype == 'TRIPLE_RIDING':
@@ -140,8 +225,14 @@ def _evidence_factors(violation, detections, scene_info):
 
     elif vtype == 'STOP_LINE_VIOLATION':
         factors['stop_line_detected'] = 1.0 if violation.get('stop_line_y') else 0.0
-        factors['vehicle_past_line'] = 0.7  # already passed geometric check
+        factors['vehicle_past_line'] = 0.7
         factors['scene_mentions_stop'] = 0.5 if _scene_relevance_boost(vtype, scene_info.get('narrative')) > 0 else 0.0
+
+    elif vtype == 'WRONG_SIDE_DRIVING':
+        factors['lane_evidence'] = 0.8
+        motion = violation.get('_motion_validated', {})
+        factors['motion_validated'] = 1.0 if motion.get('is_moving') else 0.0
+        factors['scene_mentions_wrong_side'] = 0.5 if _scene_relevance_boost(vtype, scene_info.get('narrative')) > 0 else 0.0
 
     else:
         factors['default'] = 0.5
@@ -154,13 +245,6 @@ def _evidence_factors(violation, detections, scene_info):
 
 
 def validate_violation_context(violation, detections):
-    """Reject violations missing required scene evidence.
-
-    Checks both `all_of` (every label required) and `any_of` (at least one).
-
-    Returns:
-        (valid: bool, reason: str)
-    """
     vtype = violation['violation_type']
     reqs = CONTEXT_REQUIREMENTS.get(vtype)
     if not reqs:
@@ -168,62 +252,72 @@ def validate_violation_context(violation, detections):
 
     labels = [d['label'] for d in detections]
 
-    all_of = reqs.get('all_of', [])
-    any_of = reqs.get('any_of', [])
-
-    for label in all_of:
+    for label in reqs.get('all_of', []):
         if label not in labels:
             return False, f'Required detection "{label}" not present in scene'
 
-    if any_of:
-        found = any(label in labels for label in any_of)
-        if not found:
-            return False, f'None of required detections {any_of} present in scene'
+    for label in reqs.get('any_of', []):
+        if any(l in labels for l in ([label] if isinstance(label, str) else label)):
+            break
+    else:
+        if reqs.get('any_of'):
+            return False, f'None of required detections {reqs["any_of"]} present in scene'
 
     return True, ''
 
 
-def apply_threshold(violation):
-    """Apply confidence and evidence thresholds.
+def apply_threshold(violation, quality_analysis=None):
+    """Apply violation-type-specific confidence and evidence thresholds.
 
-    Rules:
-      - Raw confidence < 0.50 → discard (unreliable detection)
-      - Evidence score < 0.30 → discard (no scene evidence supports this)
-      - Raw confidence 0.50–0.70 → 'Possible Violation', needs review
-      - Raw confidence > 0.70 → confirmed violation
-      - Evidence score 0.30–0.60 + confirmed → still flagged needs_review
+    Args:
+        violation: violation dict
+        quality_analysis: optional quality analysis dict for env adjustment
 
     Returns:
         (action: str, display_type: str, needs_review: bool)
-        action is one of: 'discard', 'possible', 'confirmed'
     """
     raw_conf = violation.get('confidence', 0)
     evidence = violation.get('_evidence_score', 1.0)
+    vtype = violation['violation_type']
 
-    if raw_conf < CONFIDENCE_FLOOR:
+    # FIX 4: Environment-aware confidence adjustment
+    if quality_analysis:
+        adjusted_conf, env_issues = environment_confidence_modifier(raw_conf, quality_analysis)
+        violation['_environment_issues'] = env_issues
+        if adjusted_conf < raw_conf:
+            violation['_environment_adjusted'] = True
+            violation['_environment_modifier'] = round(adjusted_conf / raw_conf, 3) if raw_conf > 0 else 1.0
+            raw_conf = adjusted_conf
+
+    thresholds = VIOLATION_THRESHOLDS.get(vtype, DEFAULT_THRESHOLDS)
+    floor = thresholds['floor']
+    ceiling = thresholds['possible_ceiling']
+
+    if raw_conf < floor:
         return 'discard', '', False
 
-    if evidence < 0.30:
+    if evidence < EVIDENCE_FLOOR:
         return 'discard', '', False
 
-    vtype = violation.get('display_type', violation['violation_type'].replace('_', ' ').title())
+    # FIX 6: Florence scene relevance boost can elevate "possible" → "confirmed"
+    narrative = violation.get('_scene_narrative', '')
+    scene_boost = _scene_relevance_boost(vtype, narrative)
 
-    if raw_conf < POSSIBLE_CEILING:
-        display = f'Possible {vtype}' if not vtype.startswith('Possible ') else vtype
+    display = violation.get('display_type', vtype.replace('_', ' ').title())
+
+    if raw_conf < ceiling:
+        # Scene relevance can confirm borderline cases
+        if scene_boost > 0.15 and raw_conf >= floor * 1.2:
+            return 'confirmed', display, evidence < 0.60
+        pfx = 'Possible '
+        display = f'{pfx}{display}' if not display.startswith(pfx) else display
         return 'possible', display, True
 
     needs_review = evidence < 0.60
-    return 'confirmed', vtype, needs_review
+    return 'confirmed', display, needs_review
 
 
 def rank_violations(violations, scene_info, detections):
-    """Rank violations by combined score.
-
-    Score = confidence * 0.40 + evidence_score * 0.35 + scene_relevance * 0.25
-
-    Returns:
-        list of (score, violation) sorted descending
-    """
     ranked = []
     narrative = scene_info.get('narrative', '') if scene_info else ''
 
@@ -232,6 +326,7 @@ def rank_violations(violations, scene_info, detections):
         evidence_score, factors = _evidence_factors(v, detections, scene_info)
         v['_evidence_score'] = evidence_score
         v['_evidence_factors'] = factors
+        v['_scene_narrative'] = narrative
         scene_boost = _scene_relevance_boost(v['violation_type'], narrative)
 
         combined = (raw_conf * 0.40) + (evidence_score * 0.35) + (scene_boost * 0.25)
@@ -242,23 +337,12 @@ def rank_violations(violations, scene_info, detections):
     return ranked
 
 
-def select_primary(violations, scene_info, detections):
-    """Main pipeline: filter, score, rank, and select primary violation.
-
-    Args:
-        violations: list of raw violation dicts
-        scene_info: dict with narrative, scene_breakdown
-        detections: list of detection dicts
-
-    Returns:
-        tuple of (processed_violations, primary_finding)
-        - processed_violations: filtered and enriched violation list
-        - primary_finding: dict with type, confidence, reason, or None
-    """
+def select_primary(violations, scene_info, detections, quality_analysis=None):
+    """Main pipeline with v3 upgrades: env-aware, violation-specific, Florence boost."""
     if not violations:
         return [], None
 
-    # Step 1: Context validation & evidence scoring
+    # Step 1: Context validation
     valid_violations = []
     for v in violations:
         valid, reason = validate_violation_context(v, detections)
@@ -276,12 +360,15 @@ def select_primary(violations, scene_info, detections):
         v['_evidence_score'] = evidence_score
         v['_evidence_factors'] = factors
 
-    # Step 3: Apply thresholds
+    # Step 3: Apply thresholds (env-aware, violation-specific)
     passed = []
     for v in valid_violations:
-        action, display, needs_review = apply_threshold(v)
+        action, display, needs_review = apply_threshold(v, quality_analysis)
         if action == 'discard':
-            logger.debug(f'Discarded {v.get("violation_type")} (conf={v.get("confidence"):.2f}, evidence={v.get("_evidence_score", 0):.2f})')
+            logger.debug(
+                f'Discarded {v.get("violation_type")} '
+                f'(conf={v.get("confidence"):.2f}, evidence={v.get("_evidence_score", 0):.2f})'
+            )
             continue
         v['display_type'] = display
         v['needs_review'] = needs_review or v.get('needs_review', False)
@@ -292,10 +379,10 @@ def select_primary(violations, scene_info, detections):
     if not passed:
         return [], None
 
-    # Step 4: Rank by priority score
+    # Step 4: Rank
     ranked = rank_violations(passed, scene_info, detections)
 
-    # Step 5: Select primary (highest ranked)
+    # Step 5: Select primary
     top_score, primary = ranked[0]
     primary['_is_primary'] = True
     vtype = primary['violation_type']
@@ -303,6 +390,9 @@ def select_primary(violations, scene_info, detections):
     scene_boost = _scene_relevance_boost(vtype, narrative)
 
     reason_parts = []
+    env_issues = primary.get('_environment_issues', [])
+    if env_issues:
+        reason_parts.append(f'Environment adjusted: {", ".join(env_issues)}')
     if scene_boost > 0:
         vtype_clean = vtype.lower().replace('_', ' ')
         reason_parts.append(f'Scene analysis indicates {vtype_clean}')
@@ -325,14 +415,16 @@ def select_primary(violations, scene_info, detections):
         'needs_review': primary.get('needs_review', False),
         'enforcement_recommendation': primary.get('enforcement_recommendation', 'Officer review recommended.'),
     }
+    if primary.get('_environment_adjusted'):
+        primary_finding['environment_modifier'] = primary.get('_environment_modifier', 1.0)
+        primary_finding['environment_issues'] = env_issues
 
-    # Step 6: Suppress low-confidence secondary violations
+    # Step 6: Suppress low-evidence secondaries
     processed = []
     for _, v in ranked:
         if v.get('_is_primary'):
             processed.append(v)
             continue
-        # For secondary violations, if evidence < threshold, mark as suppressed
         if v.get('_evidence_score', 0) < EVIDENCE_THRESHOLD:
             v['_suppressed'] = True
             v['human_review_status'] = 'manual_verification_required'

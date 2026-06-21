@@ -364,6 +364,18 @@ def check_helmet_violation(detections, image):
                     'Helmet model: no matching detection. HSV analysis suggests possible non-compliance.'
                 ))
 
+    # FIX 3: Convert HSV-only NO_HELMET → HELMET_ASSESSMENT_UNCERTAIN when model unavailable
+    for v in violations:
+        if (v.get('violation_type') == 'NO_HELMET'
+                and v.get('helmet_state') == 'NO_HELMET'
+                and not model_available
+                and 'HSV' in v.get('helmet_reason', '')):
+            v['violation_type'] = 'HELMET_ASSESSMENT_UNCERTAIN'
+            v['confidence'] = min(v.get('confidence', 0.5), 0.55)
+            v['display_type'] = 'Possible Helmet Non-Compliance'
+            v['human_review_status'] = 'manual_verification_required'
+            v['needs_review'] = True
+
     # Log diagnostics
     logger.debug(
         f"Helmet check: model={'available' if model_available else 'unavailable'}, "

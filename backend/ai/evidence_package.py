@@ -6,7 +6,8 @@ import config
 
 
 DETECTION_SOURCE_LABELS = {
-    'NO_HELMET': 'YOLOv8 Helmet Model / HSV Fallback',
+    'NO_HELMET': 'YOLOv8 Helmet Model',
+    'HELMET_ASSESSMENT_UNCERTAIN': 'HSV Fallback (Model Unavailable)',
     'TRIPLE_RIDING': 'Rider Association Scoring',
     'MOTORCYCLE_OVERLOADING': 'Rider Association Scoring',
     'MOTORCYCLE_EXTREME_OVERLOADING': 'Rider Association Scoring',

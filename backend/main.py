@@ -11,7 +11,8 @@ import cv2
 import numpy as np
 
 DETECTION_SOURCES = {
-    'NO_HELMET': 'YOLOv8 Helmet Model / HSV Fallback',
+    'NO_HELMET': 'YOLOv8 Helmet Model',
+    'HELMET_ASSESSMENT_UNCERTAIN': 'HSV Fallback (Model Unavailable)',
     'TRIPLE_RIDING': 'Rider Association Scoring',
     'MOTORCYCLE_OVERLOADING': 'Rider Association Scoring',
     'MOTORCYCLE_EXTREME_OVERLOADING': 'Rider Association Scoring',
@@ -26,6 +27,14 @@ DETECTION_SOURCES = {
 
 def _detection_source_for(vtype):
     return DETECTION_SOURCES.get(vtype, 'Automated Detection')
+
+ALL_VIOLATION_TYPES = (
+    'NO_HELMET', 'TRIPLE_RIDING', 'MOTORCYCLE_OVERLOADING',
+    'MOTORCYCLE_EXTREME_OVERLOADING', 'POSSIBLE_ILLEGAL_PARKING',
+    'SEATBELT_VIOLATION', 'WRONG_SIDE_DRIVING',
+    'RED_LIGHT_VIOLATION', 'STOP_LINE_VIOLATION',
+    'POSSIBLE_STOP_LINE_VIOLATION', 'HELMET_ASSESSMENT_UNCERTAIN',
+)
 
 from utils.image_processing import enhance_image, create_comparison, analyze_image_quality, get_enhancement_report
 from ai.locate_anything import LocateAnythingDetector, check_owlvit_compatibility, download_owlvit_model, ENGINE_LABELS
@@ -42,6 +51,7 @@ from ai.evidence_package import generate_evidence_report
 
 from ai.rider_association import associate_riders, classify_occupancy
 from ai.helmet_detector import get_helmet_service, HELMET_STATE_PRESENT, HELMET_STATE_ABSENT, HELMET_STATE_UNKNOWN
+from ai.motion_validator import validate_motion
 from ai.ocr import LicensePlateReader
 from ai.evidence_generator import generate_evidence
 from ai.repeat_offender import register_violation, get_top_offenders, search_offender
@@ -54,6 +64,8 @@ from ai.scene_reasoning import SceneReasoningService
 from ai.ai_verifier import AIVerificationEngine
 from ai.confidence_fusion import fuse_violation, fuse_ocr
 from ai.violation_selector import select_primary
+from ai.false_positive_registry import register_candidate
+from ai.motion_validator import validate_motion
 from database.db import (
     init_db, insert_violation, get_all_violations,
     get_statistics, get_violations_by_type, get_violations_by_day,
@@ -459,38 +471,18 @@ async def detect_violations(
                     v['officer_priority'] = 'LOW PRIORITY'
                 violations.append(v)
 
-    # ————— Compliance Assessment (FINAL decision) —————
-    ALL_VIOLATION_TYPES = (
-        'NO_HELMET', 'TRIPLE_RIDING', 'MOTORCYCLE_OVERLOADING',
-        'MOTORCYCLE_EXTREME_OVERLOADING', 'POSSIBLE_ILLEGAL_PARKING',
-        'SEATBELT_VIOLATION', 'WRONG_SIDE_DRIVING',
-        'RED_LIGHT_VIOLATION', 'STOP_LINE_VIOLATION',
-        'POSSIBLE_STOP_LINE_VIOLATION',
-    )
-    has_actual_violations = any(
-        vt in ALL_VIOLATION_TYPES
-        for vt in [v['violation_type'] for v in violations]
-    )
-
-    # Check if any rider has HELMET_UNKNOWN state
-    helmet_unknown = any(v.get('helmet_state') == 'HELMET_UNKNOWN' for v in violations)
-
-    if not has_actual_violations:
-        motorcycles_check = any(d['label'] == 'motorcycle' for d in detections)
-        persons_check = any(d['label'] == 'person' for d in detections)
-        if motorcycles_check and persons_check:
-            if helmet_unknown:
-                compliance_status = 'HELMET_UNKNOWN'
-                compliance_reason = 'Helmet state uncertain for one or more riders. Human review recommended.'
-            else:
-                compliance_status = 'COMPLIANT'
-                compliance_reason = 'All observed vehicles appear compliant with traffic regulations.'
-        else:
-            compliance_status = 'NONE'
-            compliance_reason = ''
-    else:
-        compliance_status = 'NONE'
-        compliance_reason = ''
+    # FIX 2: Wrong-side driving motion validation
+    for v in violations:
+        if v['violation_type'] == 'WRONG_SIDE_DRIVING':
+            veh_bbox = v.get('vehicle_bbox')
+            if veh_bbox:
+                motion = validate_motion(veh_bbox, image, detections)
+                v['_motion_validated'] = motion
+                if motion.get('is_moving') is False:
+                    v['display_type'] = 'Possible Wrong-Side Position'
+                    v['confidence'] = min(v['confidence'], 0.65)
+                    v['needs_review'] = True
+                    v['human_review_status'] = 'manual_verification_required'
 
     # ————— License Plate OCR —————
     plate_text, plate_conf, plate_engine = "", 0.0, 'none'
@@ -559,7 +551,9 @@ async def detect_violations(
     has_mc = any(d['label'] == 'motorcycle' for d in detections)
     has_person = any(d['label'] == 'person' for d in detections)
     has_mounted_rider = has_mc and has_person and any(mr.get('rider_count', 0) > 0 for mr in motorcycle_riders)
-    is_moving_hint = has_mounted_rider or (not has_actual_violations and has_mc)
+    curr_violation_types = [v['violation_type'] for v in violations]
+    has_any_violation = any(vt in ALL_VIOLATION_TYPES for vt in curr_violation_types)
+    is_moving_hint = has_mounted_rider or (not has_any_violation and has_mc)
     parking_violations = check_illegal_parking(detections, image, moving_vehicle_hint=is_moving_hint)
     for v in parking_violations:
         v['confidence_band'] = v.get('confidence_band', 'low')
@@ -572,9 +566,32 @@ async def detect_violations(
         v['helmet_compliance'] = None
         v['confidence_label'] = _confidence_label(v.get('confidence_band', 'low'))
         v['officer_priority'] = 'MEDIUM PRIORITY'
-    # Only add parking violations if no compliance override
-    if compliance_status != 'COMPLIANT':
-        violations.extend(parking_violations)
+    # FIX 1: Parking violations always added — compliance runs after
+    violations.extend(parking_violations)
+
+    # ————— Compliance Assessment (now runs AFTER parking detection) —————
+    has_actual_violations = any(
+        vt in ALL_VIOLATION_TYPES
+        for vt in [v['violation_type'] for v in violations]
+    )
+    helmet_unknown = any(v.get('helmet_state') == 'HELMET_UNKNOWN' for v in violations)
+
+    if not has_actual_violations:
+        motorcycles_check = any(d['label'] == 'motorcycle' for d in detections)
+        persons_check = any(d['label'] == 'person' for d in detections)
+        if motorcycles_check and persons_check:
+            if helmet_unknown:
+                compliance_status = 'HELMET_UNKNOWN'
+                compliance_reason = 'Helmet state uncertain for one or more riders. Human review recommended.'
+            else:
+                compliance_status = 'COMPLIANT'
+                compliance_reason = 'All observed vehicles appear compliant with traffic regulations.'
+        else:
+            compliance_status = 'NONE'
+            compliance_reason = ''
+    else:
+        compliance_status = 'NONE'
+        compliance_reason = ''
 
     # ————— Scene Reasoning Layer —————
     scene_reasoner = SceneReasoningService()
@@ -612,7 +629,20 @@ async def detect_violations(
         v['confidence_sources'] = fused['sources_used']
 
     # ————— Violation Prioritization & False Positive Suppression —————
-    violations, primary_finding = select_primary(violations, scene_info, detections)
+    violations, primary_finding = select_primary(violations, scene_info, detections, quality_analysis=quality_analysis)
+
+    # FIX 7: Register false positive candidates for high-confidence but suppressed violations
+    for v in violations:
+        if v.get('_suppressed') and v.get('_evidence_score', 0) < 0.50:
+            register_candidate(
+                filepath, v['violation_type'], v.get('confidence', 0),
+                root_cause='low_evidence_score'
+            )
+        elif v.get('violation_type') == 'WRONG_SIDE_DRIVING' and not v.get('_motion_validated', {}).get('is_moving'):
+            register_candidate(
+                filepath, v['violation_type'], v.get('confidence', 0),
+                root_cause='motion_validation_failed'
+            )
 
     # Pedestrian stats
     person_detections = [d for d in detections if d['label'] == 'person']
