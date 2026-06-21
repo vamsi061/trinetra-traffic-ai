@@ -132,6 +132,15 @@ def _person_is_background(person_bbox, motorcycle_bbox, img_shape):
     if m_area > 0 and p_area / m_area < 0.15:
         return True
 
+    # Person is too small to be a real rider (low-light false positive)
+    p_h = p_y2 - p_y1
+    if p_h < 30:
+        return True
+
+    # Person is far to the side beyond reasonable riding position
+    if abs(p_cx - m_cx) > m_w * 0.9 and p_cy > m_cy:
+        return True
+
     return False
 
 
@@ -154,10 +163,14 @@ def associate_riders(persons, motorcycles, img_shape=(None, None)):
 
     h, w = img_shape[:2] if img_shape and img_shape[0] else (480, 640)
     diag = np.sqrt(h ** 2 + w ** 2)
-    MIN_ASSOCIATION_THRESHOLD = 0.35
+    MIN_ASSOCIATION_THRESHOLD = 0.40
 
     person_scores = []
     for p in persons:
+        # Skip low-confidence persons (likely false positives in low light)
+        if p.get('confidence', 0) < 0.35:
+            continue
+
         # First pass: filter background persons and check overlap
         best_score = 0.0
         best_mc_idx = -1

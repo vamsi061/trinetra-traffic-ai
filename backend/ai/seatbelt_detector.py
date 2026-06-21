@@ -76,10 +76,39 @@ def detect_seatbelt_in_torso(image, person_bbox):
     return diagonal_count >= 2
 
 
+def _is_likely_car(car_bbox, image_shape):
+    """Filter out non-car vehicles misclassified as car (e.g. auto-rickshaws).
+    Cars are wide (width > height * 0.7) and occupy meaningful image area.
+    """
+    h, w = image_shape[:2]
+    x1, y1, x2, y2 = car_bbox
+    car_w = x2 - x1
+    car_h = y2 - y1
+    car_area = car_w * car_h
+    image_area = h * w
+
+    # Must occupy at least 1.5% of image area
+    if car_area / image_area < 0.015:
+        return False
+
+    # Must be at least 60px wide
+    if car_w < 60:
+        return False
+
+    # Cars are wider than they are tall or slightly taller
+    # Autos/three-wheelers are narrow (width/height < 0.6)
+    aspect = car_w / car_h if car_h > 0 else 0
+    if aspect < 0.55:
+        return False
+
+    return True
+
+
 def check_seatbelt_violation(detections, image):
     """Seatbelt detection ONLY for car occupants — one violation per car."""
     persons = [d for d in detections if d['class_id'] == config.PERSON_CLASS_ID]
-    cars = [d for d in detections if d['class_id'] == config.CAR_CLASS_ID]
+    cars = [d for d in detections if d['class_id'] == config.CAR_CLASS_ID and
+            _is_likely_car(d['bbox'], image.shape)]
 
     if not cars:
         return []
