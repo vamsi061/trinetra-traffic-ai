@@ -27,17 +27,17 @@ def _safe_cell(pdf, *args, **kwargs):
         args[2] = _sanitize(args[2])
     if 'text' in kwargs:
         kwargs['text'] = _sanitize(kwargs['text'])
-    return pdf.cell(*args, **kwargs)
+    return _safe_cell(pdf, *args, **kwargs)
 
 
 def _safe_multi_cell(pdf, *args, **kwargs):
     """pdf.multi_cell with automatic text sanitization."""
-    if len(args) >= 3:
+    if len(args) >= 2:
         args = list(args)
-        args[2] = _sanitize(args[2])
+        args[1] = _sanitize(args[1])
     if 'text' in kwargs:
         kwargs['text'] = _sanitize(kwargs['text'])
-    return pdf.multi_cell(*args, **kwargs)
+    return _safe_multi_cell(pdf, *args, **kwargs)
 
 
 DETECTION_SOURCE_LABELS = {

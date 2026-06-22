@@ -145,33 +145,26 @@ def generate_evidence(original_image, detections, violations, plate_info, source
                           cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 165, 255), 1)
 
     # ── Step 4: Draw violation labels on each violating bbox ──
-    # Group violations by bbox key to stagger overlapping banners
-    bbox_groups = {}
     for v, num in numbered_violations:
-        bbox, _ = _get_bbox_from_violation(v)
+        vtype = v['violation_type']
+        color = VIOLATION_COLORS.get(vtype, (255, 255, 255))
+        bbox, bbox_type = _get_bbox_from_violation(v)
         if not bbox:
             continue
-        key = tuple(int(x) for x in bbox)
-        bbox_groups.setdefault(key, []).append((v, num))
+        x1, y1, x2, y2 = [int(x) for x in bbox]
+        short = VIOLATION_SHORT.get(vtype, vtype)
 
-    for bbox_key, vnums in bbox_groups.items():
-        x1, y1, x2, y2 = bbox_key
-        for offset_idx, (v, num) in enumerate(vnums):
-            vtype = v['violation_type']
-            color = VIOLATION_COLORS.get(vtype, (255, 255, 255))
-            short = VIOLATION_SHORT.get(vtype, vtype)
-
-            label_w = 180
-            label_h = 22
-            stagger = offset_idx * (label_h + 2)
-            banner_x1 = max(0, x1)
-            banner_y1 = max(0, y1 - label_h - 4 - stagger)
-            banner_x2 = min(width, x1 + label_w)
-            banner_y2 = max(0, y1 - 4 - stagger)
-            cv2.rectangle(image, (banner_x1, banner_y1), (banner_x2, banner_y2), CALLOUT_BG, -1)
-            cv2.rectangle(image, (banner_x1, banner_y1), (banner_x2, banner_y2), color, 1)
-            cv2.putText(image, f"#{num} {short}", (banner_x1 + 4, banner_y2 - 5),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
+        # Draw the label as a banner at the top of the bbox
+        label_w = 180
+        label_h = 22
+        banner_x1 = max(0, x1)
+        banner_y1 = max(0, y1 - label_h - 4)
+        banner_x2 = min(width, x1 + label_w)
+        banner_y2 = max(0, y1 - 4)
+        cv2.rectangle(image, (banner_x1, banner_y1), (banner_x2, banner_y2), CALLOUT_BG, -1)
+        cv2.rectangle(image, (banner_x1, banner_y1), (banner_x2, banner_y2), color, 1)
+        cv2.putText(image, f"#{num} {short}", (banner_x1 + 4, banner_y2 - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
 
     # ── Step 5: Draw special scene markers ──
     # Draw stop line if detected (from stop_line_violation context)
