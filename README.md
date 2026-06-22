@@ -136,11 +136,11 @@ The Space builds and deploys automatically. Visit `https://YOUR_USERNAME-trinetr
 | Helmet non-compliance | `helmet_detector.py` | YOLOv8 fine-tuned (v5 crop-based) + HSV emergency fallback | Beta — 77.7% validation pass rate |
 | Triple riding | `triple_riding.py` | Rider association scoring (distance/vertical/horizontal/overlap weights) | Active — 54.2% pass rate |
 | Motorcycle overloading | `triple_riding.py` | Rider count exceeds occupancy limits (4+ overloading, 5+ extreme) | Active — YOLO detection limit |
-| Seatbelt non-compliance | `seatbelt_detector.py` | Hough line transform on car occupant torso | Disabled (hackathon) |
-| Wrong-side driving | `wrong_side_detector.py` | Lane line detection + vehicle position analysis | Disabled (hackathon) |
-| Red-light violation | `red_light_detector.py` | HSV color analysis on traffic light ROI | Disabled (hackathon) |
-| Stop-line violation | `stop_line_detector.py` | Hough line stop-line + vehicle overlap | Disabled (hackathon) |
-| Illegal parking | `parking_detector.py` | Spatial & pedestrian context heuristics | Disabled (hackathon) |
+| Seatbelt non-compliance | `seatbelt_detector.py` | Hough line transform on car occupant torso | Future enhancement |
+| Wrong-side driving | `wrong_side_detector.py` | Lane line detection + vehicle position analysis | Future enhancement |
+| Red-light violation | `red_light_detector.py` | HSV color analysis on traffic light ROI | Future enhancement |
+| Stop-line violation | `stop_line_detector.py` | Hough line stop-line + vehicle overlap | Future enhancement |
+| Illegal parking | `parking_detector.py` | Spatial & pedestrian context heuristics | Future enhancement |
 
 ## API Endpoints
 
