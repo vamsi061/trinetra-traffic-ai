@@ -116,6 +116,29 @@ export interface DetectResponse {
   license_plate: LicensePlate | null
   evidence_path: string | null
   evidence_report?: string | null
+  performance?: {
+    enhancement_time: number
+    detection_time: number
+    ocr_time: number
+    reasoning_time: number
+    total_time: number
+  }
+  scene_understanding?: {
+    narrative: string
+    tags: string[]
+    summary?: string
+  }
+  ai_review_panel?: {
+    verified_count: number
+    total_reviewed: number
+    status: string
+  }
+  primary_finding?: {
+    type: string
+    confidence: number
+    evidence_score: number
+    enforcement_recommendation: string
+  }
 }
 
 export interface LicensePlate {
@@ -369,8 +392,40 @@ export interface ExecutiveSummary {
   helmet_non_compliance_count: number
 }
 
+export interface RuntimeMetrics {
+  total_images_processed: number
+  total_violations_detected: number
+  total_reports_generated: number
+  false_positives_logged: number
+  false_positives_corrected: number
+  most_common_fp_type: string
+  active_models: Record<string, { status: string; purpose: string }>
+}
+
+export interface SystemHealth {
+  status: string
+  service: string
+  version: string
+  models: Record<string, string>
+}
+
 export async function getExecutiveSummary(): Promise<ExecutiveSummary> {
   const { data } = await api.get('/intelligence/executive-summary')
+  return data
+}
+
+export async function getRuntimeMetrics(): Promise<RuntimeMetrics> {
+  const { data } = await api.get('/api/system/runtime-metrics')
+  return data
+}
+
+export async function getFalsePositiveStats(): Promise<any> {
+  const { data } = await api.get('/api/system/false-positive-stats')
+  return data
+}
+
+export async function getSystemHealth(): Promise<SystemHealth> {
+  const { data } = await api.get('/api/health')
   return data
 }
 

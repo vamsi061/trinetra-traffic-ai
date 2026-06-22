@@ -27,8 +27,8 @@ VIOLATION_THRESHOLDS = {
     'MOTORCYCLE_EXTREME_OVERLOADING': {'floor': 0.50, 'possible_ceiling': 0.70},
     'POSSIBLE_ILLEGAL_PARKING':    {'floor': 0.65, 'possible_ceiling': 0.80},
     'WRONG_SIDE_DRIVING':          {'floor': 0.80, 'possible_ceiling': 0.90},
-    'STOP_LINE_VIOLATION':         {'floor': 0.60, 'possible_ceiling': 0.75},
-    'RED_LIGHT_VIOLATION':         {'floor': 0.70, 'possible_ceiling': 0.80},
+    'STOP_LINE_VIOLATION':         {'floor': 0.55, 'possible_ceiling': 0.75},
+    'RED_LIGHT_VIOLATION':         {'floor': 0.60, 'possible_ceiling': 0.80},
 }
 
 DEFAULT_THRESHOLDS = {'floor': 0.50, 'possible_ceiling': 0.70}
@@ -131,6 +131,7 @@ CONTEXT_REQUIREMENTS = {
     'STOP_LINE_VIOLATION': {},
     'WRONG_SIDE_DRIVING': {'all_of': ['car', 'motorcycle', 'truck', 'bus']},
     'RED_LIGHT_VIOLATION': {'any_of': ['traffic light', 'car', 'motorcycle']},
+    'STOP_LINE_VIOLATION': {'any_of': ['car', 'motorcycle', 'truck', 'bus']},
     'MOTORCYCLE_OVERLOADING': {'all_of': ['motorcycle', 'person']},
     'MOTORCYCLE_EXTREME_OVERLOADING': {'all_of': ['motorcycle', 'person']},
 }
@@ -158,8 +159,12 @@ EVIDENCE_WEIGHTS = {
         'scene_mentions_overload': 0.15, 'association_confidence': 0.15,
     },
     'STOP_LINE_VIOLATION': {
-        'stop_line_detected': 0.40, 'vehicle_past_line': 0.35,
-        'scene_mentions_stop': 0.25,
+        'stop_line_detected': 0.30, 'vehicle_past_line': 0.30,
+        'line_visible': 0.15, 'scene_mentions_stop': 0.25,
+    },
+    'RED_LIGHT_VIOLATION': {
+        'traffic_light_detected': 0.25, 'signal_red': 0.30,
+        'vehicle_past_line': 0.25, 'scene_mentions_red_light': 0.20,
     },
     'WRONG_SIDE_DRIVING': {
         'lane_evidence': 0.35, 'motion_validated': 0.35,
@@ -226,7 +231,16 @@ def _evidence_factors(violation, detections, scene_info):
     elif vtype == 'STOP_LINE_VIOLATION':
         factors['stop_line_detected'] = 1.0 if violation.get('stop_line_y') else 0.0
         factors['vehicle_past_line'] = 0.7
+        diag = violation.get('stop_line_diagnostics', {})
+        factors['line_visible'] = diag.get('line_visibility_score', 0.5)
         factors['scene_mentions_stop'] = 0.5 if _scene_relevance_boost(vtype, scene_info.get('narrative')) > 0 else 0.0
+
+    elif vtype == 'RED_LIGHT_VIOLATION':
+        factors['traffic_light_detected'] = 1.0 if violation.get('traffic_light_bbox') else 0.0
+        diag = violation.get('red_light_diagnostics', {})
+        factors['signal_red'] = (diag.get('signal_visibility', 0.0) + diag.get('signal_brightness', 0.0)) / 2.0
+        factors['vehicle_past_line'] = diag.get('vehicle_position_score', 0.5)
+        factors['scene_mentions_red_light'] = 0.5 if _scene_relevance_boost(vtype, scene_info.get('narrative')) > 0 else 0.0
 
     elif vtype == 'WRONG_SIDE_DRIVING':
         factors['lane_evidence'] = 0.8

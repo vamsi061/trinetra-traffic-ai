@@ -1,8 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload as UploadIcon, AlertTriangle, CheckCircle, Search, Users, Shield, FileText, Eye, ThumbsUp, Bug, ChevronDown, ChevronUp, BarChart3, Activity, Presentation, Download, Cpu, Loader2, Key } from 'lucide-react'
-import { uploadImage, getEvidenceUrl, getEvidenceReportUrl, getDetectionEngines, checkOwlvitCompat, downloadOwlvitModel } from '../api/client'
-import type { DetectResponse, ReliabilityBadge, DetectionEngine, OwlVitCompat, OwlVitDownloadResult } from '../api/client'
+import { Upload as UploadIcon, AlertTriangle, CheckCircle, Search, Shield, FileText, Eye, ThumbsUp, Bug, ChevronDown, ChevronUp, BarChart3, Activity, Presentation, Download, Loader2, Settings, ChevronRight, Gauge, Server, TrendingUp, MapPin, BarChart4, Zap, Cpu } from 'lucide-react'
+import { uploadImage, getEvidenceUrl, getEvidenceReportUrl, getRuntimeMetrics, getFalsePositiveStats, getSystemHealth } from '../api/client'
+import type { DetectResponse, ReliabilityBadge, RuntimeMetrics } from '../api/client'
 
 function ConfidenceBadge({ band, label }: { band: string; label: string }) {
   const colors: Record<string, string> = {
@@ -152,198 +152,122 @@ function ExecutiveSummaryCard({ result }: { result: DetectResponse }) {
   )
 }
 
-function DetectionEngineSelector({
-  engines,
-  selectedEngine,
+function PipelineStatus() {
+  const steps = [
+    'Automatic Image Enhancement',
+    'Object Detection',
+    'Traffic Violation Analysis',
+    'AI Scene Understanding',
+    'Evidence Report Generation',
+  ]
+  return (
+    <div className="glass rounded-xl p-6">
+      <h3 className="text-sm font-semibold text-white mb-4">Analysis Pipeline</h3>
+      <div className="space-y-2">
+        {steps.map((s, i) => (
+          <div key={i} className="flex items-center gap-2 text-sm">
+            <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
+            <span className="text-trinetra-text">{s}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 pt-4 border-t border-trinetra-border flex items-center gap-2 text-sm">
+        <span className="w-2 h-2 rounded-full bg-green-400" />
+        <span className="text-green-400 font-medium">Status: Ready</span>
+      </div>
+    </div>
+  )
+}
+
+function AdvancedSettingsPanel({
+  engine,
   onEngineChange,
-  hfToken,
-  onHfTokenChange,
-  owlvitCompat,
-  owlvitDownloading,
-  owlvitDownloadResult,
-  onDownloadOwlvit,
-  onAnalyze,
-  loading,
-  hasFile,
+  showDiagnostics,
+  onDiagnosticsChange,
+  benchmarkMode,
+  onBenchmarkChange,
+  devLogs,
+  onDevLogsChange,
 }: {
-  engines: DetectionEngine[]
-  selectedEngine: string
-  onEngineChange: (id: string) => void
-  hfToken: string
-  onHfTokenChange: (token: string) => void
-  owlvitCompat: OwlVitCompat | null
-  owlvitDownloading: boolean
-  owlvitDownloadResult: OwlVitDownloadResult | null
-  onDownloadOwlvit: () => void
-  onAnalyze: () => void
-  loading: boolean
-  hasFile: boolean
+  engine: string
+  onEngineChange: (v: string) => void
+  showDiagnostics: boolean
+  onDiagnosticsChange: (v: boolean) => void
+  benchmarkMode: boolean
+  onBenchmarkChange: (v: boolean) => void
+  devLogs: boolean
+  onDevLogsChange: (v: boolean) => void
 }) {
-  const engine = engines.find(e => e.id === selectedEngine)
+  const [open, setOpen] = useState(false)
 
   return (
-    <div className="glass rounded-xl p-6 mt-6">
-      <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-        <Cpu className="w-4 h-4" /> Detection Engine
-      </h3>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        {engines.map(e => {
-          const isSelected = selectedEngine === e.id
-          return (
+    <div className="glass rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between p-4 text-sm text-trinetra-muted hover:text-white transition-colors"
+      >
+        <span className="flex items-center gap-2">
+          <Settings className="w-4 h-4" />
+          Advanced Settings
+        </span>
+        <ChevronRight className={`w-4 h-4 transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+      {open && (
+        <div className="px-4 pb-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-trinetra-muted">Detection Engine</label>
+            <select
+              value={engine}
+              onChange={e => onEngineChange(e.target.value)}
+              className="text-xs bg-[#1a2040] border border-trinetra-border rounded-lg px-2 py-1 text-white focus:outline-none focus:border-red-500/50"
+            >
+              <option value="auto">Auto (recommended)</option>
+              <option value="yolo">YOLOv8</option>
+              <option value="locateanything">HF Inference</option>
+              <option value="owlvit_local">OwlViT Local</option>
+              <option value="locateanything_gradio">Gradio</option>
+            </select>
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-trinetra-muted">Show Diagnostics</label>
             <button
-              key={e.id}
-              onClick={() => onEngineChange(e.id)}
-              disabled={!e.available && !isSelected}
-              className={`text-left p-3 rounded-lg border transition-all ${
-                isSelected
-                  ? 'border-red-500/50 bg-red-500/10'
-                  : e.available
-                    ? 'border-trinetra-border bg-[#1a2040] hover:border-red-500/30'
-                    : 'border-trinetra-border bg-[#1a2040]/50 opacity-50 cursor-not-allowed'
+              onClick={() => onDiagnosticsChange(!showDiagnostics)}
+              className={`w-9 h-5 rounded-full transition-colors ${
+                showDiagnostics ? 'bg-red-500' : 'bg-[#1a2040] border border-trinetra-border'
               }`}
             >
-              <div className="flex items-center gap-2 mb-1">
-                <span className={`w-2 h-2 rounded-full ${
-                  isSelected ? 'bg-red-400' : e.available ? 'bg-green-400' : 'bg-gray-500'
-                }`} />
-                <span className="text-sm font-medium text-white">{e.id}</span>
-              </div>
-              <p className="text-[10px] text-trinetra-muted leading-tight">{e.label}</p>
-              {!e.available && (
-                <p className="text-[10px] text-yellow-500 mt-1">
-                  {e.needs_token ? 'Token not set' : e.needs_download ? 'Model not downloaded' : 'Unavailable'}
-                </p>
-              )}
-              {e.available && (
-                <p className="text-[10px] text-green-500 mt-1">Ready</p>
-              )}
+              <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${
+                showDiagnostics ? 'translate-x-[18px]' : 'translate-x-[2px]'
+              }`} />
             </button>
-          )
-        })}
-      </div>
-
-      {/* Conditional: HF token input for LocateAnything — optional if already stored */}
-      {selectedEngine === 'locateanything' && (
-        <div className="mb-4 p-4 rounded-lg bg-[#0d1225] border border-trinetra-border">
-          <label className="block text-xs font-medium text-trinetra-muted mb-2 flex items-center gap-2">
-            <Key className="w-3 h-3" />
-            HuggingFace API Token
-            {engine?.token_set ? (
-              <span className="text-green-500 text-[11px] flex items-center gap-1">
-                <CheckCircle className="w-3 h-3" /> Configured in Engine Configuration
-              </span>
-            ) : (
-              <span className="text-yellow-500 text-[11px]">Required — set in sidebar Engine Configuration</span>
-            )}
-          </label>
-          {engine?.token_set ? null : (
-            <p className="text-[11px] text-red-400 mb-2">
-              No token configured. Go to the <strong>Engine Configuration</strong> in the sidebar to set one, or enter below for this request only.
-            </p>
-          )}
-          {!engine?.token_set && (
-            <input
-              type="password"
-              value={hfToken}
-              onChange={e => onHfTokenChange(e.target.value)}
-              placeholder="hf_..."
-              className="w-full px-3 py-2 rounded-lg bg-[#1a2040] border border-trinetra-border text-white text-sm placeholder-trinetra-muted/50 focus:outline-none focus:border-red-500/50"
-            />
-          )}
-          <p className="text-[10px] text-trinetra-muted mt-1">
-            Get a free token at{' '}
-            <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer"
-               className="text-blue-400 underline">huggingface.co/settings/tokens</a>
-          </p>
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-trinetra-muted">Benchmark Mode</label>
+            <button
+              onClick={() => onBenchmarkChange(!benchmarkMode)}
+              className={`w-9 h-5 rounded-full transition-colors ${
+                benchmarkMode ? 'bg-red-500' : 'bg-[#1a2040] border border-trinetra-border'
+              }`}
+            >
+              <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${
+                benchmarkMode ? 'translate-x-[18px]' : 'translate-x-[2px]'
+              }`} />
+            </button>
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-trinetra-muted">Developer Logs</label>
+            <button
+              onClick={() => onDevLogsChange(!devLogs)}
+              className={`w-9 h-5 rounded-full transition-colors ${
+                devLogs ? 'bg-red-500' : 'bg-[#1a2040] border border-trinetra-border'
+              }`}
+            >
+              <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform ${
+                devLogs ? 'translate-x-[18px]' : 'translate-x-[2px]'
+              }`} />
+            </button>
+          </div>
         </div>
-      )}
-
-      {/* Conditional: OwlViT local download */}
-      {selectedEngine === 'owlvit_local' && (
-        <div className="mb-4 p-4 rounded-lg bg-[#0d1225] border border-trinetra-border">
-          <h4 className="text-xs font-medium text-trinetra-muted mb-2">Compatibility Check</h4>
-
-          {owlvitCompat ? (
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${owlvitCompat.torch_installed ? 'bg-green-400' : 'bg-red-400'}`} />
-                <span>PyTorch: {owlvitCompat.torch_installed ? 'Installed' : 'Missing'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${owlvitCompat.transformers_installed ? 'bg-green-400' : 'bg-red-400'}`} />
-                <span>Transformers: {owlvitCompat.transformers_installed ? 'Installed' : 'Missing'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${owlvitCompat.cuda_available ? 'bg-green-400' : 'bg-yellow-400'}`} />
-                <span>GPU: {owlvitCompat.cuda_available ? owlvitCompat.gpu_name : 'Not available (CPU mode)'}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-blue-400" />
-                <span>RAM: {(owlvitCompat.estimated_ram_mb / 1024).toFixed(1)}GB | Download: ~{owlvitCompat.download_size_mb}MB</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${owlvitCompat.can_run ? 'bg-green-400' : 'bg-red-400'}`} />
-                <span>Can run: {owlvitCompat.can_run ? 'Yes' : 'No'}</span>
-              </div>
-              <p className="text-trinetra-muted mt-2">{owlvitCompat.message}</p>
-
-              {!owlvitCompat.transformers_installed && (
-                <p className="text-yellow-500 mt-2">
-                  Install transformers: <code className="bg-[#1a2040] px-1 rounded">pip install transformers</code>
-                </p>
-              )}
-
-              {owlvitCompat.can_run && (
-                <div className="mt-3">
-                  <button
-                    onClick={onDownloadOwlvit}
-                    disabled={owlvitDownloading}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/20 transition-colors text-sm disabled:opacity-50"
-                  >
-                    {owlvitDownloading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Download className="w-4 h-4" />
-                    )}
-                    {owlvitDownloading ? 'Downloading...' : `Download OwlViT Model (~${owlvitCompat.download_size_mb}MB)`}
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-xs text-trinetra-muted">Loading compatibility info...</p>
-          )}
-
-          {owlvitDownloadResult && (
-            <div className={`mt-3 p-3 rounded-lg text-xs ${
-              owlvitDownloadResult.success
-                ? 'bg-green-500/10 text-green-300 border border-green-500/30'
-                : 'bg-red-500/10 text-red-300 border border-red-500/30'
-            }`}>
-              {owlvitDownloadResult.message}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Analyze button — only block if locateanything AND no token anywhere */}
-      {hasFile && (
-        <button
-          onClick={onAnalyze}
-          disabled={loading || (selectedEngine === 'locateanything' && !hfToken && !engine?.token_set)}
-          className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-red-500/10 text-red-300 border border-red-500/30 rounded-xl hover:bg-red-500/20 transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Activity className="w-4 h-4" />
-          )}
-          {loading
-            ? `Analyzing with ${selectedEngine === 'auto' ? 'best engine' : selectedEngine}...`
-            : `Analyze with ${selectedEngine === 'auto' ? 'Auto (best engine)' : selectedEngine}`
-          }
-        </button>
       )}
     </div>
   )
@@ -356,47 +280,16 @@ export default function Upload() {
   const [error, setError] = useState<string | null>(null)
   const [showDebug, setShowDebug] = useState(false)
   const [judgeMode, setJudgeMode] = useState(false)
-
-  // Detection engine state
-  const [engines, setEngines] = useState<DetectionEngine[]>([])
-  const [selectedEngine, setSelectedEngine] = useState('auto')
-  const [hfToken, setHfToken] = useState('')
-  const [owlvitCompat, setOwlvitCompat] = useState<OwlVitCompat | null>(null)
-  const [owlvitDownloading, setOwlvitDownloading] = useState(false)
-  const [owlvitDownloadResult, setOwlvitDownloadResult] = useState<OwlVitDownloadResult | null>(null)
   const [fileSelected, setFileSelected] = useState<File | null>(null)
 
-  const refreshEngines = useCallback(() => {
-    getDetectionEngines().then(res => {
-      setEngines(res.engines)
-      const preferred = res.engines.find(e => e.id === 'locateanything' && e.token_set)
-      if (preferred && selectedEngine === 'auto') {
-        setSelectedEngine('locateanything')
-      }
-    }).catch(() => {})
-    checkOwlvitCompat().then(setOwlvitCompat).catch(() => {})
-  }, [selectedEngine])
-
-  // Refresh engines when a file is selected (ensures config changes are reflected)
-  useEffect(() => {
-    if (fileSelected) {
-      refreshEngines()
-    }
-  }, [fileSelected, refreshEngines])
-
-  // Also listen for config changes from the sidebar modal
-  useEffect(() => {
-    const handler = () => refreshEngines()
-    window.addEventListener('engine-config-changed', handler)
-    return () => window.removeEventListener('engine-config-changed', handler)
-  }, [refreshEngines])
-
-  // Re-check compat when owlvit_local is selected
-  useEffect(() => {
-    if (selectedEngine === 'owlvit_local' && !owlvitCompat) {
-      checkOwlvitCompat().then(setOwlvitCompat).catch(() => {})
-    }
-  }, [selectedEngine, owlvitCompat])
+  // Advanced settings defaults
+  const [advEngine, setAdvEngine] = useState('auto')
+  const [advDiagnostics, setAdvDiagnostics] = useState(false)
+  const [advBenchmark, setAdvBenchmark] = useState(false)
+  const [advDevLogs, setAdvDevLogs] = useState(false)
+  const [runtimeMetrics, setRuntimeMetrics] = useState<RuntimeMetrics | null>(null)
+  const [fpStats, setFpStats] = useState<any>(null)
+  const [systemHealth, setSystemHealth] = useState<any>(null)
 
   const runAnalysis = useCallback(async () => {
     if (!fileSelected) return
@@ -404,27 +297,28 @@ export default function Upload() {
     setError(null)
     setLoading(true)
     try {
-      const res = await uploadImage(fileSelected, selectedEngine, hfToken)
+      const res = await uploadImage(fileSelected)
       const motorcycles = res.detections.filter(d => d.label === 'motorcycle')
       const persons = res.detections.filter(d => d.label === 'person')
       const totalOccupants = res.motorcycle_riders?.reduce((s, mr) => s + mr.rider_count, 0) || 0
-      console.log('=== TRINETRA DASHBOARD DEBUG ===')
+      console.log('=== TRINETRA ANALYSIS ===')
       console.log('detected_motorcycles:', motorcycles.length)
       console.log('detected_persons:', persons.length)
       console.log('estimated_occupants:', totalOccupants)
       console.log('detected_violations:', res.violations.length)
       console.log('risk_score:', res.risk_score)
       console.log('crowded_scene:', res.crowded_scene)
-      console.log('ai_review_recommended:', res.ai_review_recommended)
-      console.log('detection_engine:', selectedEngine)
       console.log('================================')
       setResult(res)
+      getRuntimeMetrics().then(setRuntimeMetrics).catch(() => {})
+      getFalsePositiveStats().then(setFpStats).catch(() => {})
+      getSystemHealth().then(setSystemHealth).catch(() => {})
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Analysis failed.')
     } finally {
       setLoading(false)
     }
-  }, [fileSelected, selectedEngine, hfToken])
+  }, [fileSelected])
 
   const onDrop = useCallback(async (accepted: File[]) => {
     const file = accepted[0]
@@ -434,22 +328,6 @@ export default function Upload() {
     setResult(null)
     setError(null)
   }, [])
-
-  const handleDownloadOwlvit = useCallback(async () => {
-    setOwlvitDownloading(true)
-    setOwlvitDownloadResult(null)
-    try {
-      const res = await downloadOwlvitModel()
-      setOwlvitDownloadResult(res)
-      if (res.success) {
-        refreshEngines()
-      }
-    } catch (e: any) {
-      setOwlvitDownloadResult({ success: false, message: e?.message || 'Download failed', model_path: '', model_size_mb: 0 })
-    } finally {
-      setOwlvitDownloading(false)
-    }
-  }, [refreshEngines])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -523,22 +401,28 @@ export default function Upload() {
         </div>
       </div>
 
-      {/* Engine Selector — shown after file is selected */}
+      {/* Pipeline + Analyze — shown after file is selected */}
       {fileSelected && !result && !loading && (
-        <DetectionEngineSelector
-          engines={engines}
-          selectedEngine={selectedEngine}
-          onEngineChange={setSelectedEngine}
-          hfToken={hfToken}
-          onHfTokenChange={setHfToken}
-          owlvitCompat={owlvitCompat}
-          owlvitDownloading={owlvitDownloading}
-          owlvitDownloadResult={owlvitDownloadResult}
-          onDownloadOwlvit={handleDownloadOwlvit}
-          onAnalyze={runAnalysis}
-          loading={loading}
-          hasFile={!!fileSelected}
-        />
+        <div className="space-y-4 mt-6">
+          <PipelineStatus />
+          <AdvancedSettingsPanel
+            engine={advEngine}
+            onEngineChange={setAdvEngine}
+            showDiagnostics={advDiagnostics}
+            onDiagnosticsChange={setAdvDiagnostics}
+            benchmarkMode={advBenchmark}
+            onBenchmarkChange={setAdvBenchmark}
+            devLogs={advDevLogs}
+            onDevLogsChange={setAdvDevLogs}
+          />
+          <button
+            onClick={runAnalysis}
+            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-xl hover:bg-red-500 transition-all text-sm font-semibold shadow-lg shadow-red-600/20"
+          >
+            <Activity className="w-4 h-4" />
+            Analyze Image
+          </button>
+        </div>
       )}
 
       {preview && (
@@ -564,7 +448,7 @@ export default function Upload() {
       {loading && (
         <div className="glass rounded-xl p-8 mt-8 text-center">
           <div className="w-10 h-10 border-2 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-trinetra-muted">Analyzing image with AI engine...</p>
+          <p className="text-trinetra-muted">Running analysis pipeline...</p>
         </div>
       )}
 
@@ -578,25 +462,132 @@ export default function Upload() {
       {result && !loading && (
         <div className={`space-y-6 mt-8 ${judgeMode ? 'p-4 rounded-2xl border-2 border-purple-500/30 bg-purple-500/[0.02]' : ''}`}>
           {judgeMode && (
-            <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30 text-center">
+            <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
               <Presentation className="w-6 h-6 text-purple-400 mx-auto mb-2" />
-              <h2 className="text-lg font-bold text-white">TRINETRA AI</h2>
-              <p className="text-sm text-purple-300 mt-1">AI-Powered Traffic Enforcement Intelligence Platform</p>
-              <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-3 text-xs text-trinetra-muted">
-                <span>✓ Violation Detection</span>
-                <span>✓ Explainable AI</span>
-                <span>✓ Confidence Scoring</span>
-                <span>✓ Human Review</span>
-                <span>✓ Evidence Generation</span>
-                <span>✓ Repeat Offender Intelligence</span>
-                <span>✓ Hotspot Analytics</span>
-                <span>✓ Officer Prioritization</span>
-                <span>✓ Smart City Readiness</span>
+              <h2 className="text-lg font-bold text-white text-center">TRINETRA AI — Processing Breakdown</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+                <div className="bg-purple-500/5 rounded-lg p-3 text-center border border-purple-500/20">
+                  <div className="text-[10px] text-purple-300 font-semibold mb-1">1. Image Enhancement</div>
+                  <div className="text-xs text-trinetra-muted">CLAHE + Denoise + Dehaze</div>
+                  <div className="text-[10px] text-green-400 mt-1">✓ Complete</div>
+                </div>
+                <div className="bg-purple-500/5 rounded-lg p-3 text-center border border-purple-500/20">
+                  <div className="text-[10px] text-purple-300 font-semibold mb-1">2. Object Detection</div>
+                  <div className="text-xs text-trinetra-muted">YOLOv8s / OwlViT</div>
+                  <div className="text-[10px] text-green-400 mt-1">✓ {result.detections.length} objects</div>
+                </div>
+                <div className="bg-purple-500/5 rounded-lg p-3 text-center border border-purple-500/20">
+                  <div className="text-[10px] text-purple-300 font-semibold mb-1">3. Violation Analysis</div>
+                  <div className="text-xs text-trinetra-muted">{result.violations.length} violations found</div>
+                  <div className="text-[10px] text-green-400 mt-1">✓ Complete</div>
+                </div>
+                <div className="bg-purple-500/5 rounded-lg p-3 text-center border border-purple-500/20">
+                  <div className="text-[10px] text-purple-300 font-semibold mb-1">4. License Plate OCR</div>
+                  <div className="text-xs text-trinetra-muted">{result.license_plate?.number || 'Not detected'}</div>
+                  <div className={`text-[10px] mt-1 ${result.license_plate ? 'text-green-400' : 'text-yellow-400'}`}>
+                    {result.license_plate ? '✓ Read' : '○ Not found'}
+                  </div>
+                </div>
+                <div className="bg-purple-500/5 rounded-lg p-3 text-center border border-purple-500/20">
+                  <div className="text-[10px] text-purple-300 font-semibold mb-1">5. Scene Understanding</div>
+                  <div className="text-xs text-trinetra-muted truncate">{result.scene_understanding?.narrative?.slice(0, 40) || 'N/A'}...</div>
+                  <div className="text-[10px] text-green-400 mt-1">✓ Florence-2</div>
+                </div>
+                <div className="bg-purple-500/5 rounded-lg p-3 text-center border border-purple-500/20">
+                  <div className="text-[10px] text-purple-300 font-semibold mb-1">6. AI Verification</div>
+                  <div className="text-xs text-trinetra-muted">{result.ai_review_panel?.verified_count || 0} verified findings</div>
+                  <div className="text-[10px] text-green-400 mt-1">✓ Cross-validated</div>
+                </div>
+                <div className="bg-purple-500/5 rounded-lg p-3 text-center border border-purple-500/20">
+                  <div className="text-[10px] text-purple-300 font-semibold mb-1">7. Evidence Generation</div>
+                  <div className="text-xs text-trinetra-muted">PDF + Annotated Image</div>
+                  <div className="text-[10px] text-green-400 mt-1">✓ Ready</div>
+                </div>
+                <div className="bg-purple-500/5 rounded-lg p-3 text-center border border-purple-500/20">
+                  <div className="text-[10px] text-purple-300 font-semibold mb-1">8. Intelligence Report</div>
+                  <div className="text-xs text-trinetra-muted">Risk Score: {result.risk_score || 0}</div>
+                  <div className="text-[10px] text-green-400 mt-1">✓ Complete</div>
+                </div>
               </div>
+              {result.performance && (
+                <div className="mt-3 text-center text-xs text-purple-300">
+                  Total pipeline: {result.performance.total_time.toFixed(1)}s | {result.performance.detection_time.toFixed(1)}s detection | {result.performance.reasoning_time.toFixed(1)}s reasoning
+                </div>
+              )}
             </div>
           )}
 
           <ExecutiveSummaryCard result={result} />
+
+          {result.performance && (
+            <div className="glass rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-trinetra-text mb-3 flex items-center gap-2">
+                <Gauge className="w-4 h-4" /> Pipeline Performance
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: 'Enhancement', value: result.performance.enhancement_time, unit: 's' },
+                  { label: 'Detection', value: result.performance.detection_time, unit: 's' },
+                  { label: 'OCR', value: result.performance.ocr_time, unit: 's' },
+                  { label: 'Reasoning', value: result.performance.reasoning_time, unit: 's' },
+                ].map((m, i) => (
+                  <div key={i} className="bg-[#1a2040] rounded-lg p-3 text-center">
+                    <div className="text-xs text-trinetra-muted mb-1">{m.label}</div>
+                    <div className="text-lg font-bold text-white">{m.value.toFixed(1)}<span className="text-xs text-trinetra-muted ml-0.5">{m.unit}</span></div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 pt-3 border-t border-trinetra-border flex justify-between items-center">
+                <span className="text-xs text-trinetra-muted">Total Processing Time</span>
+                <span className="text-sm font-bold text-green-400">{result.performance.total_time.toFixed(1)}s</span>
+              </div>
+            </div>
+          )}
+
+          {systemHealth && (
+            <div className="glass rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-trinetra-text mb-3 flex items-center gap-2">
+                <Server className="w-4 h-4" /> System Health
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {Object.entries(systemHealth.models || {}).map(([name, status], i) => (
+                  <div key={i} className="bg-[#1a2040] rounded-lg p-3 text-center">
+                    <div className="text-xs text-trinetra-muted mb-1 capitalize">{name.replace(/_/g, ' ')}</div>
+                    <div className={`text-sm font-bold flex items-center justify-center gap-1.5 ${
+                      status === 'loaded' || status === 'paddleocr' ? 'text-green-400' : 'text-yellow-400'
+                    }`}>
+                      <span className={`w-2 h-2 rounded-full ${
+                        status === 'loaded' || status === 'paddleocr' ? 'bg-green-400' : 'bg-yellow-400'
+                      }`} />
+                      {(status === 'loaded' || status === 'paddleocr') ? 'ONLINE' : status === 'fallback' ? 'FALLBACK' : String(status).toUpperCase()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {fpStats && (
+            <div className="glass rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-trinetra-text mb-3 flex items-center gap-2">
+                <Zap className="w-4 h-4" /> Validation Insights
+              </h3>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+                  <div className="text-xs text-trinetra-muted mb-1">FP Corrected</div>
+                  <div className="text-lg font-bold text-green-400">{fpStats.reviewed_candidates || 0}</div>
+                </div>
+                <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+                  <div className="text-xs text-trinetra-muted mb-1">Most Common Type</div>
+                  <div className="text-sm font-bold text-red-400 truncate">{fpStats.top_violation_type || 'N/A'}</div>
+                </div>
+                <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+                  <div className="text-xs text-trinetra-muted mb-1">Total Candidates</div>
+                  <div className="text-lg font-bold text-white">{fpStats.total_candidates || 0}</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {!judgeMode && (
             <button
@@ -756,6 +747,36 @@ export default function Upload() {
               </div>
             )}
           </div>
+
+          {result.primary_finding && (
+            <div className="glass rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-trinetra-text mb-3 flex items-center gap-2">
+                <MapPin className="w-4 h-4" /> Analysis Summary
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+                  <div className="text-xs text-trinetra-muted mb-1">Primary Finding</div>
+                  <div className="text-sm font-bold text-white truncate">{result.primary_finding.type || 'N/A'}</div>
+                </div>
+                <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+                  <div className="text-xs text-trinetra-muted mb-1">Confidence</div>
+                  <div className={`text-lg font-bold ${
+                    (result.primary_finding.confidence || 0) >= 0.7 ? 'text-green-400' : 'text-yellow-400'
+                  }`}>{(result.primary_finding.confidence || 0) * 100}%</div>
+                </div>
+                <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+                  <div className="text-xs text-trinetra-muted mb-1">Evidence</div>
+                  <div className={`text-lg font-bold ${
+                    (result.primary_finding.evidence_score || 0) >= 0.6 ? 'text-green-400' : 'text-yellow-400'
+                  }`}>{((result.primary_finding.evidence_score || 0) * 100).toFixed(0)}%</div>
+                </div>
+                <div className="bg-[#1a2040] rounded-lg p-3 text-center">
+                  <div className="text-xs text-trinetra-muted mb-1">Enforcement</div>
+                  <div className="text-[11px] font-medium text-blue-300 leading-tight">{result.primary_finding.enforcement_recommendation?.split('.')[0] || 'Review'}</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {result.license_plate && (
             <div className="glass rounded-xl p-6">

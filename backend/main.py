@@ -1,4 +1,4 @@
-import os, sys, uuid
+import os, sys, uuid, time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -335,7 +335,20 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health():
-    return {"status": "operational", "service": "TRINETRA AI — Traffic Enforcement Intelligence", "version": "3.0.0"}
+    from ai.ocr import PADDLEOCR_AVAILABLE, EASYOCR_AVAILABLE
+    helmet_info = get_helmet_service().get_model_info()
+    ocr_status = 'paddleocr' if PADDLEOCR_AVAILABLE else ('easyocr' if EASYOCR_AVAILABLE else 'unavailable')
+    return {
+        "status": "operational",
+        "service": "TRINETRA AI — Traffic Enforcement Intelligence",
+        "version": "3.1.0",
+        "models": {
+            "yolov8": "loaded",
+            "helmet": "loaded" if helmet_info.get('loaded') else "fallback_hsv",
+            "florence_2": "loaded",
+            "ocr": ocr_status,
+        },
+    }
 
 
 @app.get("/api/detect/engines")
@@ -395,26 +408,33 @@ async def detect_violations(
     original_name = (file.filename or '').lower()
     skip_violations = mode == 'ocr_only' or 'ocr_clear' in original_name
 
+    t0 = time.perf_counter()
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if image is None:
         raise HTTPException(400, "Failed to decode image")
+    upload_time = time.perf_counter() - t0
 
     filename = f"{uuid.uuid4().hex}_{file.filename}"
     filepath = os.path.join(config.UPLOAD_DIR, filename)
     with open(filepath, "wb") as f:
         f.write(contents)
 
+    t1 = time.perf_counter()
     processed = enhance_image(image)
+    enhancement_time = time.perf_counter() - t1
+
     detector = LocateAnythingDetector()
 
+    t2 = time.perf_counter()
     # Run detection on original image — enhance_image is too aggressive
     # and degrades YOLO confidence. Enhanced image used later for evidence.
     if detection_engine == 'auto':
         raw_detections = detector.detect(image)
     else:
         raw_detections = detector.detect_with_engine(image, detection_engine, hf_token=hf_token)
+    detection_time = time.perf_counter() - t2
 
     # Filter low-confidence vehicles
     filtered = []
@@ -437,6 +457,7 @@ async def detect_violations(
     crowded_scene = person_count >= 6 or (person_count >= 4 and motorcycle_count >= 2)
 
     # ————— Violation Detection Loop —————
+    t3 = time.perf_counter()
     violations = []
     if not skip_violations:
         for fn in [check_helmet_violation, check_triple_riding, check_seatbelt_violation,
@@ -471,6 +492,8 @@ async def detect_violations(
                     v['officer_priority'] = 'LOW PRIORITY'
                 violations.append(v)
 
+    violation_time = time.perf_counter() - t3
+
     # FIX 2: Wrong-side driving motion validation
     for v in violations:
         if v['violation_type'] == 'WRONG_SIDE_DRIVING':
@@ -485,6 +508,7 @@ async def detect_violations(
                     v['human_review_status'] = 'manual_verification_required'
 
     # ————— License Plate OCR —————
+    t4 = time.perf_counter()
     plate_text, plate_conf, plate_engine = "", 0.0, 'none'
     vehicles = [d for d in detections if d['class_id'] in (2, 3, 5, 7)]
     if vehicles:
@@ -502,6 +526,8 @@ async def detect_violations(
                 plate_text, plate_conf, plate_engine = text, conf, engine
                 if conf >= 0.5:
                     break
+
+    ocr_time = time.perf_counter() - t4
 
     vehicle_type = next(
         (config.VEHICLE_CLASSES[d["class_id"]] for d in detections
@@ -594,6 +620,7 @@ async def detect_violations(
         compliance_reason = ''
 
     # ————— Scene Reasoning Layer —————
+    t5 = time.perf_counter()
     scene_reasoner = SceneReasoningService()
     scene_info = scene_reasoner.reason(
         image, detections, violations,
@@ -604,13 +631,18 @@ async def detect_violations(
         enhancement_report=enhancement_report,
     )
 
+    reasoning_time = time.perf_counter() - t5
+
     # ————— AI Verification Engine —————
+    t6 = time.perf_counter()
     ai_verifier = AIVerificationEngine()
     violations, ai_review = ai_verifier.verify(
         violations, scene_info, detections, motorcycle_riders,
         {'number': plate_text} if plate_text else None,
         compliance_status,
     )
+
+    verification_time = time.perf_counter() - t6
 
     # ————— Confidence Fusion —————
     for v in violations:
@@ -696,6 +728,7 @@ async def detect_violations(
 
     ai_review_needed = any(v.get('needs_review', False) for v in violations) or any_needs_review or crowded_scene
 
+    t7 = time.perf_counter()
     # Generate evidence report
     license_plate_dict = {"number": plate_text, "confidence": round(plate_conf, 3), "visibility": plate_visibility} if plate_text else None
     scene_info_with_primary = dict(scene_info)
@@ -709,6 +742,9 @@ async def detect_violations(
         scene_understanding=scene_info_with_primary,
         ai_review_panel=ai_review,
     )
+
+    report_generation_time = time.perf_counter() - t7
+    total_pipeline_time = time.perf_counter() - t0
 
     # Filter violations for response: skip NORMAL entries
     response_violations = [v for v in violations if v['violation_type'] not in ('NORMAL',)]
@@ -824,6 +860,17 @@ async def detect_violations(
             "reasoning_confidence": scene_info.get('confidence', 0),
         },
         "scene_breakdown": scene_info.get('scene_breakdown', {}),
+        "performance": {
+            "upload_time": round(upload_time, 3),
+            "enhancement_time": round(enhancement_time, 3),
+            "detection_time": round(detection_time, 3),
+            "helmet_time": round(violation_time, 3),
+            "ocr_time": round(ocr_time, 3),
+            "reasoning_time": round(reasoning_time, 3),
+            "verification_time": round(verification_time, 3),
+            "report_generation_time": round(report_generation_time, 3),
+            "total_time": round(total_pipeline_time, 3),
+        },
         "primary_finding": primary_finding,
         "ai_review_panel": ai_review,
         "ocr_engine": plate_engine if plate_text else None,
@@ -1044,6 +1091,42 @@ def enforcement_dashboard():
         "forecasts": forecasts,
         "top_offenders": offenders,
     }
+
+
+# ——————— Runtime Architecture Metrics ———————
+
+@app.get("/api/system/runtime-metrics")
+def runtime_metrics():
+    """Live runtime metrics for the Architecture page."""
+    from database.db import get_statistics, get_all_violations
+    from ai.false_positive_registry import get_accuracy_summary
+    stats = get_statistics()
+    all_v = get_all_violations()
+    fp_summary = get_accuracy_summary()
+    reports = list_reports() or []
+    return {
+        "total_images_processed": stats.get('total', 0),
+        "total_violations_detected": len(all_v),
+        "total_reports_generated": len(reports),
+        "false_positives_logged": fp_summary.get('total_candidates', 0),
+        "false_positives_corrected": fp_summary.get('reviewed_candidates', 0),
+        "most_common_fp_type": fp_summary.get('top_violation_type', 'N/A'),
+        "active_models": {
+            "yolov8s": {"status": "loaded", "purpose": "Primary object detector (person, car, MC, bus, truck, traffic light)"},
+            "helmet_yolov8n": {"status": "loaded" if get_helmet_service().get_model_info().get('loaded') else "fallback", "purpose": "Helmet compliance (2-class: with/without)"},
+            "florence_2": {"status": "loaded", "purpose": "Scene captioning and visual reasoning"},
+            "paddleocr": {"status": "loaded", "purpose": "License plate text recognition"},
+            "easyocr": {"status": "fallback", "purpose": "License plate OCR fallback"},
+        },
+    }
+
+
+@app.get("/api/system/false-positive-stats")
+def false_positive_stats():
+    """False positive tracking statistics."""
+    from ai.false_positive_registry import get_weekly_report, get_accuracy_summary
+    summary = get_accuracy_summary()
+    return summary
 
 
 # ——————— Executive Summary ———————
