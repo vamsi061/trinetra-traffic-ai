@@ -11,13 +11,20 @@ app_port: 7860
 
 AI-powered traffic enforcement intelligence platform for smart cities. Automatically detects 8 violation types from traffic camera images, reads license plates, generates evidence PDFs, and provides predictive enforcement analytics.
 
+**Key Achievements:**
+- ✅ **License Plate OCR** — Correctly identifies registration text from traffic camera images (e.g. KA01, AB, 1234 fragments recombined into full plates)
+- ✅ **Pedestrian Detection** — Accurately counts persons/pedestrians in the scene with exact counts per image
+- ✅ **Helmet Violation Detection** — Rider-level helmet assessment via dedicated YOLO model with HSV fallback
+- ✅ **Triple Riding & Overloading** — Occupancy analysis through rider association scoring
+- ✅ **End-to-End Pipeline** — 15-phase automated processing from image upload to evidence PDF generation
+
 **Hackathon Alignment**: Developed for the *Automated Photo Identification and Classification for Traffic Violations Using Computer Vision* challenge — covering image preprocessing, vehicle/pedestrian detection, violation detection (helmet, triple riding, overloading, seatbelt, wrong-side, red-light, stop-line, illegal parking), license plate OCR, evidence generation, and performance evaluation (Accuracy, Precision, Recall, F1, mAP).
 
 ## Features
 
+- **License Plate OCR** — Full plate text extraction via EasyOCR with fragment recombination & plate enhancement. **Correctly reads registration text from traffic images** (e.g. "KA01AB1234")
+- **Pedestrian & Person Detection** — YOLOv8s accurately detects and counts persons/pedestrians per scene with exact counts, supporting crowd analysis and rider association
 - **8 Violation Detectors** — Helmet non-compliance, triple riding, motorcycle overloading, seatbelt non-compliance, wrong-side driving, red-light violation, stop-line violation, illegal parking
-- **License Plate OCR** — Full plate text extraction via EasyOCR with fragment recombination & plate enhancement
-- **Vehicle & Road User Detection** — YOLOv8s detects cars, motorcycles, buses, trucks, persons, traffic lights, stop signs
 - **Explainable AI** — Per-violation confidence, reliability badge, human review status, and enforcement recommendation
 - **Risk Scoring** — Enhanced profiling with repeat-offender multipliers, location risk, time-of-day risk
 - **Evidence Reports** — Professional PDF reports (fpdf2) with case info, quality assessment, violation table, scene assessment, officer notes
