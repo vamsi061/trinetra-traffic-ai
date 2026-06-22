@@ -158,6 +158,14 @@ EVIDENCE_WEIGHTS = {
         'has_motorcycle': 0.30, 'rider_count_ge_3': 0.40,
         'scene_mentions_overload': 0.15, 'association_confidence': 0.15,
     },
+    'MOTORCYCLE_OVERLOADING': {
+        'has_motorcycle': 0.25, 'rider_count_ge_4': 0.45,
+        'scene_mentions_overload': 0.15, 'association_confidence': 0.15,
+    },
+    'MOTORCYCLE_EXTREME_OVERLOADING': {
+        'has_motorcycle': 0.20, 'rider_count_ge_5': 0.50,
+        'scene_mentions_overload': 0.15, 'association_confidence': 0.15,
+    },
     'STOP_LINE_VIOLATION': {
         'stop_line_detected': 0.30, 'vehicle_past_line': 0.30,
         'line_visible': 0.15, 'scene_mentions_stop': 0.25,
@@ -228,6 +236,20 @@ def _evidence_factors(violation, detections, scene_info):
         factors['scene_mentions_overload'] = 0.5 if _scene_relevance_boost(vtype, scene_info.get('narrative')) > 0 else 0.0
         factors['association_confidence'] = min(1.0, violation.get('confidence', 0))
 
+    elif vtype == 'MOTORCYCLE_OVERLOADING':
+        rider_count = violation.get('rider_count', 0)
+        factors['has_motorcycle'] = 1.0 if 'motorcycle' in labels else 0.0
+        factors['rider_count_ge_4'] = 1.0 if rider_count >= 4 else 0.0
+        factors['scene_mentions_overload'] = 0.5 if _scene_relevance_boost(vtype, scene_info.get('narrative')) > 0 else 0.0
+        factors['association_confidence'] = min(1.0, violation.get('confidence', 0))
+
+    elif vtype == 'MOTORCYCLE_EXTREME_OVERLOADING':
+        rider_count = violation.get('rider_count', 0)
+        factors['has_motorcycle'] = 1.0 if 'motorcycle' in labels else 0.0
+        factors['rider_count_ge_5'] = 1.0 if rider_count >= 5 else 0.0
+        factors['scene_mentions_overload'] = 0.5 if _scene_relevance_boost(vtype, scene_info.get('narrative')) > 0 else 0.0
+        factors['association_confidence'] = min(1.0, violation.get('confidence', 0))
+
     elif vtype == 'STOP_LINE_VIOLATION':
         factors['stop_line_detected'] = 1.0 if violation.get('stop_line_y') else 0.0
         factors['vehicle_past_line'] = 0.7
@@ -294,8 +316,11 @@ def apply_threshold(violation, quality_analysis=None):
     evidence = violation.get('_evidence_score', 1.0)
     vtype = violation['violation_type']
 
-    # FIX 4: Environment-aware confidence adjustment
-    if quality_analysis:
+    # FIX 4: Environment-aware confidence adjustment.
+    # Skip for occupancy violations (triple_riding/overloading) — they rely on
+    # rider counting, not visual detail, so image quality is irrelevant.
+    if quality_analysis and vtype not in ('TRIPLE_RIDING', 'MOTORCYCLE_OVERLOADING',
+                                           'MOTORCYCLE_EXTREME_OVERLOADING'):
         adjusted_conf, env_issues = environment_confidence_modifier(raw_conf, quality_analysis)
         violation['_environment_issues'] = env_issues
         if adjusted_conf < raw_conf:
@@ -331,6 +356,22 @@ def apply_threshold(violation, quality_analysis=None):
     return 'confirmed', display, needs_review
 
 
+def _occupancy_boost(violation):
+    """Boost priority for occupancy violations with confirmed rider counts.
+    
+    Only applies to TRIPLE_RIDING and MOTORCYCLE_OVERLOADING (not EXTREME) —
+    EXTREME_OVERLOADING at conf~0.80 naturally outranks NO_HELMET without boost,
+    and boosting it causes wrong primaries in PARKING/HELMET_MISSING images.
+    """
+    vtype = violation['violation_type']
+    rider_count = violation.get('rider_count', 0)
+    if vtype == 'TRIPLE_RIDING' and rider_count >= 3:
+        return 0.15
+    if vtype == 'MOTORCYCLE_OVERLOADING' and rider_count >= 4:
+        return 0.15
+    return 0.0
+
+
 def rank_violations(violations, scene_info, detections):
     ranked = []
     narrative = scene_info.get('narrative', '') if scene_info else ''
@@ -342,8 +383,9 @@ def rank_violations(violations, scene_info, detections):
         v['_evidence_factors'] = factors
         v['_scene_narrative'] = narrative
         scene_boost = _scene_relevance_boost(v['violation_type'], narrative)
+        occ_boost = _occupancy_boost(v)
 
-        combined = (raw_conf * 0.40) + (evidence_score * 0.35) + (scene_boost * 0.25)
+        combined = (raw_conf * 0.40) + (evidence_score * 0.35) + (scene_boost * 0.25) + occ_boost
         v['_priority_score'] = round(combined, 3)
         ranked.append((combined, v))
 

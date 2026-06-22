@@ -1,4 +1,4 @@
-import os, sys, uuid, time
+import os, sys, uuid, time, subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -10,9 +10,27 @@ from fastapi.staticfiles import StaticFiles
 import cv2
 import numpy as np
 
+# ————— TRINETRA STARTUP BANNER —————
+_GIT_HASH = subprocess.run(
+    ['git', 'rev-parse', '--short', 'HEAD'],
+    capture_output=True, text=True,
+    cwd=os.path.dirname(os.path.abspath(__file__))
+).stdout.strip()
+
+from ai.helmet_detector import NO_HELMET_THRESHOLD as _HELMET_THRESHOLD
+NO_HELMET_THRESHOLD = _HELMET_THRESHOLD  # re-export for health endpoint
+
+print(f"""
+{'='*60}
+  TRINETRA v3.1 (helmet v5 crop-based)
+  commit      {_GIT_HASH}
+  helmet_threshold={_HELMET_THRESHOLD}
+{'='*60}
+""")
+
 DETECTION_SOURCES = {
     'NO_HELMET': 'YOLOv8 Helmet Model',
-    'HELMET_ASSESSMENT_UNCERTAIN': 'HSV Fallback (Model Unavailable)',
+    'HELMET_ASSESSMENT_UNCERTAIN': 'Helmet Model (Low Confidence / HSV)',
     'TRIPLE_RIDING': 'Rider Association Scoring',
     'MOTORCYCLE_OVERLOADING': 'Rider Association Scoring',
     'MOTORCYCLE_EXTREME_OVERLOADING': 'Rider Association Scoring',
@@ -342,6 +360,9 @@ def health():
         "status": "operational",
         "service": "TRINETRA AI — Traffic Enforcement Intelligence",
         "version": "3.1.0",
+        "commit": _GIT_HASH,
+        "helmet_detector": "v5 (crop-based)",
+        "helmet_threshold": NO_HELMET_THRESHOLD,
         "models": {
             "yolov8": "loaded",
             "helmet": "loaded" if helmet_info.get('loaded') else "fallback_hsv",

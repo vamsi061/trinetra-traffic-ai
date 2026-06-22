@@ -7,7 +7,7 @@ import config
 
 DETECTION_SOURCE_LABELS = {
     'NO_HELMET': 'YOLOv8 Helmet Model',
-    'HELMET_ASSESSMENT_UNCERTAIN': 'HSV Fallback (Model Unavailable)',
+    'HELMET_ASSESSMENT_UNCERTAIN': 'Helmet Model (Low Confidence / HSV)',
     'TRIPLE_RIDING': 'Rider Association Scoring',
     'MOTORCYCLE_OVERLOADING': 'Rider Association Scoring',
     'MOTORCYCLE_EXTREME_OVERLOADING': 'Rider Association Scoring',
@@ -147,7 +147,10 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
             for metric in ['brightness', 'contrast', 'sharpness', 'noise']:
                 val = quality_analysis.get(metric)
                 if val is not None:
-                    status = 'Good' if val > 0.4 else ('Fair' if val > 0.2 else 'Poor')
+                    if metric == 'noise':
+                        status = 'Poor' if val > 0.4 else ('Fair' if val > 0.2 else 'Good')
+                    else:
+                        status = 'Good' if val > 0.4 else ('Fair' if val > 0.2 else 'Poor')
                     pdf.cell(0, 6, f'  {metric.title()}: {val:.2f} ({status})', new_x="LMARGIN", new_y="NEXT")
             issues = quality_analysis.get('issues', [])
             if issues:
@@ -329,6 +332,21 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
             pdf.set_font('Helvetica', 'I', 10)
             pdf.multi_cell(0, 6, narrative)
             pdf.ln(2)
+
+        # Include detected object counts alongside narrative for cross-reference
+        scene_breakdown = scene_understanding.get('scene_breakdown', {})
+        if scene_breakdown:
+            pdf.set_font('Helvetica', '', 8)
+            pdf.set_text_color(80, 80, 80)
+            parts = []
+            for k in ('motorcycles', 'cars', 'buses', 'trucks', 'visible_persons', 'bicycles'):
+                v = scene_breakdown.get(k)
+                if v is not None and v > 0:
+                    parts.append(f'{k.replace("_", " ").title()}: {v}')
+            if parts:
+                pdf.cell(0, 5, 'Detected objects: ' + ' | '.join(parts), new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(2)
+            pdf.set_text_color(0, 0, 0)
 
         for label, value in [
             ('Assessment Method', 'Florence-2' if analysis_type == 'florence-2' else 'Template-based'),
