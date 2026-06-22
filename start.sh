@@ -52,6 +52,25 @@ install_python_deps() {
     info "Installing/verifying Python dependencies..."
     pip install -r "$BACKEND_DIR/requirements.txt"
     ok "Python dependencies ready"
+
+    check_helmet_model
+}
+
+check_helmet_model() {
+    MODEL_FILE="$BACKEND_DIR/models/helmet_yolov8n.pt"
+    if [ -f "$MODEL_FILE" ]; then
+        SIZE_MB=$(du -sm "$MODEL_FILE" | cut -f1)
+        ok "Helmet model found ($SIZE_MB MB)"
+    else
+        warn "Helmet model not found — downloading from Hugging Face..."
+        source "$VENV_DIR/bin/activate"
+        python "$BACKEND_DIR/download_helmet_model.py"
+        if [ -f "$MODEL_FILE" ]; then
+            ok "Helmet model downloaded"
+        else
+            fail "Failed to download helmet model"
+        fi
+    fi
 }
 
 install_frontend_deps() {
@@ -135,6 +154,9 @@ if [ "$1" == "--install" ]; then
     ok "All dependencies installed. Run 'bash start.sh' to start."
     exit 0
 fi
+
+# Create data directories
+mkdir -p "$ROOT_DIR/data/uploads" "$ROOT_DIR/data/evidence" "$ROOT_DIR/data/reports"
 
 # Install everything
 install_python_deps
