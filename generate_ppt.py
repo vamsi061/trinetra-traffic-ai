@@ -21,6 +21,7 @@ GREEN = RGBColor(0x34, 0xD3, 0x99)
 AMBER = RGBColor(0xF5, 0x9E, 0x0B)
 PURPLE = RGBColor(0xA7, 0x8B, 0xFA)
 ORANGE = RGBColor(0xF9, 0x73, 0x16)
+CYAN = RGBColor(0x06, 0xD6, 0xA0)
 
 def add_bg(slide, color=DARK):
     bg = slide.background
@@ -111,10 +112,13 @@ def find_evidence(source_name):
     if not os.path.isdir(EVIDENCE_DIR):
         return None
     base = os.path.splitext(os.path.basename(source_name))[0]
+    candidates = []
     for f in os.listdir(EVIDENCE_DIR):
         if base in f:
-            return os.path.join(EVIDENCE_DIR, f)
-    return None
+            candidates.append(os.path.join(EVIDENCE_DIR, f))
+    if not candidates:
+        return None
+    return max(candidates, key=os.path.getmtime)
 
 # ═══════════════════════════════════════════════════════════════
 # SLIDE 1: Title
@@ -360,13 +364,14 @@ for i, (num, title, sub) in enumerate(steps):
     add_text_box(slide, x + Inches(0.6), y + Inches(0.4), Inches(3.0), Inches(0.3), sub, font_size=11, color=MUTED)
 
 # ═══════════════════════════════════════════════════════════════
-# SLIDE 12: Violation Showcase (4 key violations)
+# SLIDE 12: Violation Showcase (5 working detections)
 # ═══════════════════════════════════════════════════════════════
 showcase = [
-    ('No Helmet Detection [BETA]', 'HELMET_MISSING_001.png', 'Motorcycle rider without helmet.\nConfidence: 87% | Risk: 30 | Beta', RED),
-    ('Triple Riding Detection', 'TRIPLE_RIDING_001.jpeg', '3 riders on one motorcycle.\nConfidence: 89% | Risk: 75', AMBER),
-    ('Motorcycle Overloading', 'OVERLOADING_001.jpg', '4+ occupants on motorcycle.\nConfidence: 95% | Risk: 95', ORANGE),
-    ('Wrong-Side Driving', 'HELMET_MISSING_002.png', 'Vehicle on wrong road side.\nConfidence: 85% | Risk: 85', PURPLE),
+    ('Triple Riding Detection', 'TRIPLE_RIDING_001.jpeg', '3 riders on one motorcycle.\nConfidence: 89% | Risk: 97', AMBER),
+    ('Bike & Helmet Detection', 'BikesHelmets01.png', 'Bike + helmet-wearing riders identified.\n2 riders detected | Risk: Low', CYAN),
+    ('No Helmet Detection', 'HELMET_MISSING_001.png', 'Motorcycle rider without helmet.\nConfidence: 63% | Risk: 39', RED),
+    ('Pedestrian Detection', 'PEDESTRIAN_001.png', 'Pedestrian & zone monitoring.\nIllegal parking assessment | Risk: Medium', BLUE),
+    ('License Plate OCR', 'OCR_CLEAR_001.png', 'License plate detection & OCR.\nPlate text extracted | Risk: High', PURPLE),
 ]
 for vi, (vname, sample, desc, accent) in enumerate(showcase):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
@@ -407,7 +412,7 @@ for vi, (vname, sample, desc, accent) in enumerate(showcase):
             feat, font_size=9, color=MUTED)
 
 # ═══════════════════════════════════════════════════════════════
-# SLIDE 16: Performance Validation
+# SLIDE 17: Performance Validation
 # ═══════════════════════════════════════════════════════════════
 slide = prs.slides.add_slide(prs.slide_layouts[6])
 add_bg(slide)

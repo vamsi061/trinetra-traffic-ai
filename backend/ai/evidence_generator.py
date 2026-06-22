@@ -126,15 +126,15 @@ def generate_evidence(original_image, detections, violations, plate_info, source
         bbox, bbox_type = _get_bbox_from_violation(v)
 
         if bbox:
+            x1, y1, x2, y2 = [int(x) for x in bbox]
             # Halo effect
             _draw_halo(image, bbox, color, alpha=0.18)
             # Thick colored border
-            x1, y1, x2, y2 = [int(x) for x in bbox]
             cv2.rectangle(image, (x1, y1), (x2, y2), color, 3)
 
-            # Callout circle at top-center of bbox
+            # Callout circle at bottom-center of bbox (avoids overlapping with top banner)
             cx = (x1 + x2) // 2
-            cy = max(14, y1 - 14)
+            cy = min(height - 14, y2 + 14)
             _draw_callout_circle(image, cx, cy, num, color)
 
         # Draw rider markers for triple riding
