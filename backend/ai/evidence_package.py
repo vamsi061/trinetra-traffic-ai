@@ -1,8 +1,43 @@
 import os
 import uuid
+import re
 from datetime import datetime
 from fpdf import FPDF
 import config
+
+
+def _sanitize(text):
+    """Replace characters outside Latin-1 range that fpdf Helvetica can't render."""
+    if not isinstance(text, str):
+        return str(text)
+    replacements = {
+        '\u2014': '-', '\u2013': '-', '\u2022': '*', '\u2026': '...',
+        '\u2018': "'", '\u2019': "'", '\u201c': '"', '\u201d': '"',
+        '\u00b7': '*', '\u2022': '*', '\u2026': '...', '\u00a0': ' ',
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text.encode('latin-1', errors='replace').decode('latin-1')
+
+
+def _safe_cell(pdf, *args, **kwargs):
+    """pdf.cell with automatic text sanitization."""
+    if len(args) >= 3:
+        args = list(args)
+        args[2] = _sanitize(args[2])
+    if 'text' in kwargs:
+        kwargs['text'] = _sanitize(kwargs['text'])
+    return _safe_cell(pdf, *args, **kwargs)
+
+
+def _safe_multi_cell(pdf, *args, **kwargs):
+    """pdf.multi_cell with automatic text sanitization."""
+    if len(args) >= 2:
+        args = list(args)
+        args[1] = _sanitize(args[1])
+    if 'text' in kwargs:
+        kwargs['text'] = _sanitize(kwargs['text'])
+    return _safe_multi_cell(pdf, *args, **kwargs)
 
 
 DETECTION_SOURCE_LABELS = {
@@ -40,10 +75,10 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
     # ——— Header ———
     pdf.set_font('Helvetica', 'B', 20)
     pdf.set_text_color(20, 60, 120)
-    pdf.cell(0, 14, 'TRINETRA AI - Evidence Report', new_x="LMARGIN", new_y="NEXT", align='C')
+    _safe_cell(pdf, 0, 14, 'TRINETRA AI - Evidence Report', new_x="LMARGIN", new_y="NEXT", align='C')
     pdf.set_font('Helvetica', '', 9)
     pdf.set_text_color(80, 80, 80)
-    pdf.cell(0, 6, f'Generated: {timestamp}  |  Report ID: {report_id}', new_x="LMARGIN", new_y="NEXT", align='C')
+    _safe_cell(pdf, 0, 6, f'Generated: {timestamp}  |  Report ID: {report_id}', new_x="LMARGIN", new_y="NEXT", align='C')
     pdf.ln(6)
 
     # ——— Separator ———
@@ -55,7 +90,7 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
     # ——— 1. Case Information ———
     pdf.set_font('Helvetica', 'B', 13)
     pdf.set_text_color(20, 60, 120)
-    pdf.cell(0, 9, '1. Case Information', new_x="LMARGIN", new_y="NEXT")
+    _safe_cell(pdf, 0, 9, '1. Case Information', new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
 
     plate_text = license_plate.get('number', 'Not detected') if license_plate else 'Not detected'
@@ -74,15 +109,15 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
     pdf.set_text_color(0, 0, 0)
     for label, value in info_items:
         pdf.set_font('Helvetica', 'B', 10)
-        pdf.cell(42, 7, label + ':')
+        _safe_cell(pdf, 42, 7, label + ':')
         pdf.set_font('Helvetica', '', 10)
-        pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
+        _safe_cell(pdf, 0, 7, value, new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
 
     # ——— 2. Image Quality ———
     pdf.set_font('Helvetica', 'B', 13)
     pdf.set_text_color(20, 60, 120)
-    pdf.cell(0, 9, '2. Image Quality Assessment', new_x="LMARGIN", new_y="NEXT")
+    _safe_cell(pdf, 0, 9, '2. Image Quality Assessment', new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
     pdf.set_font('Helvetica', '', 10)
     pdf.set_text_color(0, 0, 0)
@@ -92,16 +127,16 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
         ('Accuracy Impact', quality.get('expected_accuracy_impact', 'N/A')),
     ]:
         pdf.set_font('Helvetica', 'B', 10)
-        pdf.cell(34, 7, label + ':')
+        _safe_cell(pdf, 34, 7, label + ':')
         pdf.set_font('Helvetica', '', 10)
-        pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
+        _safe_cell(pdf, 0, 7, value, new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
     # ——— 2b. Image Enhancement ———
     if enhancement_report or quality_analysis:
         pdf.set_font('Helvetica', 'B', 13)
         pdf.set_text_color(20, 60, 120)
-        pdf.cell(0, 9, '2a. Image Enhancement Pipeline', new_x="LMARGIN", new_y="NEXT")
+        _safe_cell(pdf, 0, 9, '2a. Image Enhancement Pipeline', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(1)
         pdf.set_font('Helvetica', '', 10)
         pdf.set_text_color(0, 0, 0)
@@ -113,18 +148,18 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
             fallback_reason = enhancement_report.get('fallback_reason', '')
 
             pdf.set_font('Helvetica', 'B', 10)
-            pdf.cell(0, 7, 'Enhancement Steps:', new_x="LMARGIN", new_y="NEXT")
+            _safe_cell(pdf, 0, 7, 'Enhancement Steps:', new_x="LMARGIN", new_y="NEXT")
             pdf.set_font('Helvetica', '', 10)
             if steps_applied:
                 for step in steps_applied:
-                    pdf.cell(0, 6, f'  - {step}', new_x="LMARGIN", new_y="NEXT")
+                    _safe_cell(pdf, 0, 6, f'  - {step}', new_x="LMARGIN", new_y="NEXT")
             else:
-                pdf.cell(0, 6, '  (None - image already good quality)', new_x="LMARGIN", new_y="NEXT")
+                _safe_cell(pdf, 0, 6, '  (None - image already good quality)', new_x="LMARGIN", new_y="NEXT")
 
             if failover:
                 pdf.set_font('Helvetica', 'I', 9)
                 pdf.set_text_color(200, 100, 30)
-                pdf.cell(0, 6, f'  Fallback mode: {fallback_reason}', new_x="LMARGIN", new_y="NEXT")
+                _safe_cell(pdf, 0, 6, f'  Fallback mode: {fallback_reason}', new_x="LMARGIN", new_y="NEXT")
                 pdf.set_text_color(0, 0, 0)
 
             pdf.ln(1)
@@ -135,14 +170,14 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
                 ('Failover Used', 'Yes' if failover else 'No'),
             ]:
                 pdf.set_font('Helvetica', 'B', 10)
-                pdf.cell(42, 7, label + ':')
+                _safe_cell(pdf, 42, 7, label + ':')
                 pdf.set_font('Helvetica', '', 10)
-                pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
+                _safe_cell(pdf, 0, 7, value, new_x="LMARGIN", new_y="NEXT")
 
         if quality_analysis:
             pdf.ln(1)
             pdf.set_font('Helvetica', 'B', 10)
-            pdf.cell(0, 7, 'Quality Metrics:', new_x="LMARGIN", new_y="NEXT")
+            _safe_cell(pdf, 0, 7, 'Quality Metrics:', new_x="LMARGIN", new_y="NEXT")
             pdf.set_font('Helvetica', '', 10)
             for metric in ['brightness', 'contrast', 'sharpness', 'noise']:
                 val = quality_analysis.get(metric)
@@ -151,17 +186,17 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
                         status = 'Poor' if val > 0.4 else ('Fair' if val > 0.2 else 'Good')
                     else:
                         status = 'Good' if val > 0.4 else ('Fair' if val > 0.2 else 'Poor')
-                    pdf.cell(0, 6, f'  {metric.title()}: {val:.2f} ({status})', new_x="LMARGIN", new_y="NEXT")
+                    _safe_cell(pdf, 0, 6, f'  {metric.title()}: {val:.2f} ({status})', new_x="LMARGIN", new_y="NEXT")
             issues = quality_analysis.get('issues', [])
             if issues:
-                pdf.cell(0, 6, f'  Detected Issues: {", ".join(issues)}', new_x="LMARGIN", new_y="NEXT")
+                _safe_cell(pdf, 0, 6, f'  Detected Issues: {", ".join(issues)}', new_x="LMARGIN", new_y="NEXT")
 
         pdf.ln(3)
 
     # ——— 3. Detected Objects ———
     pdf.set_font('Helvetica', 'B', 13)
     pdf.set_text_color(20, 60, 120)
-    pdf.cell(0, 9, '3. Detected Objects', new_x="LMARGIN", new_y="NEXT")
+    _safe_cell(pdf, 0, 9, '3. Detected Objects', new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
 
     obj_counts = [
@@ -176,14 +211,14 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
     pdf.set_fill_color(235, 240, 250)
     pdf.set_draw_color(180, 190, 210)
     col_w = [70, 30]
-    pdf.cell(col_w[0], 7, 'Object Type', border=1, fill=True)
-    pdf.cell(col_w[1], 7, 'Count', border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
+    _safe_cell(pdf, col_w[0], 7, 'Object Type', border=1, fill=True)
+    _safe_cell(pdf, col_w[1], 7, 'Count', border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
 
     pdf.set_font('Helvetica', '', 10)
     pdf.set_text_color(0, 0, 0)
     for label, count in obj_counts:
-        pdf.cell(col_w[0], 7, label, border=1)
-        pdf.cell(col_w[1], 7, str(count), border=1, new_x="LMARGIN", new_y="NEXT")
+        _safe_cell(pdf, col_w[0], 7, label, border=1)
+        _safe_cell(pdf, col_w[1], 7, str(count), border=1, new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
     # ——— 3b. Scene Breakdown ———
@@ -191,7 +226,7 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
         sb = scene_understanding['scene_breakdown']
         pdf.set_font('Helvetica', 'B', 13)
         pdf.set_text_color(20, 60, 120)
-        pdf.cell(0, 9, '3b. Scene Composition', new_x="LMARGIN", new_y="NEXT")
+        _safe_cell(pdf, 0, 9, '3b. Scene Composition', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(1)
 
         sb_items = [
@@ -206,13 +241,13 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
         pdf.set_font('Helvetica', 'B', 10)
         pdf.set_fill_color(235, 240, 250)
         pdf.set_draw_color(180, 190, 210)
-        pdf.cell(col_w[0], 7, 'Category', border=1, fill=True)
-        pdf.cell(col_w[1], 7, 'Count', border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
+        _safe_cell(pdf, col_w[0], 7, 'Category', border=1, fill=True)
+        _safe_cell(pdf, col_w[1], 7, 'Count', border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
         pdf.set_font('Helvetica', '', 10)
         pdf.set_text_color(0, 0, 0)
         for label, count in sb_items:
-            pdf.cell(col_w[0], 7, label, border=1)
-            pdf.cell(col_w[1], 7, str(count), border=1, new_x="LMARGIN", new_y="NEXT")
+            _safe_cell(pdf, col_w[0], 7, label, border=1)
+            _safe_cell(pdf, col_w[1], 7, str(count), border=1, new_x="LMARGIN", new_y="NEXT")
         pdf.ln(4)
 
     # ——— 3c. Primary Finding ———
@@ -220,11 +255,11 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
     if primary_finding:
         pdf.set_font('Helvetica', 'B', 13)
         pdf.set_text_color(180, 40, 20)
-        pdf.cell(0, 9, '3c. Primary Finding', new_x="LMARGIN", new_y="NEXT")
+        _safe_cell(pdf, 0, 9, '3c. Primary Finding', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(1)
         pdf.set_font('Helvetica', 'B', 11)
         pdf.set_text_color(0, 0, 0)
-        pdf.cell(0, 7, primary_finding.get('type', primary_finding.get('violation_type', 'Unknown')), new_x="LMARGIN", new_y="NEXT")
+        _safe_cell(pdf, 0, 7, primary_finding.get('type', primary_finding.get('violation_type', 'Unknown')), new_x="LMARGIN", new_y="NEXT")
         pdf.set_font('Helvetica', '', 10)
         for label, value in [
             ('Type', primary_finding.get('violation_type', 'N/A')),
@@ -236,21 +271,21 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
             ('Enforcement', primary_finding.get('enforcement_recommendation', 'N/A')),
         ]:
             pdf.set_font('Helvetica', 'B', 10)
-            pdf.cell(36, 6, label + ':')
+            _safe_cell(pdf, 36, 6, label + ':')
             pdf.set_font('Helvetica', '', 10)
-            pdf.cell(0, 6, value, new_x="LMARGIN", new_y="NEXT")
+            _safe_cell(pdf, 0, 6, value, new_x="LMARGIN", new_y="NEXT")
         pdf.ln(3)
 
     # ——— 4. Observed Findings ———
     pdf.set_font('Helvetica', 'B', 13)
     pdf.set_text_color(20, 60, 120)
-    pdf.cell(0, 9, '4. Observed Findings', new_x="LMARGIN", new_y="NEXT")
+    _safe_cell(pdf, 0, 9, '4. Observed Findings', new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
 
     if not violations:
         pdf.set_font('Helvetica', 'I', 10)
         pdf.set_text_color(60, 60, 60)
-        pdf.cell(0, 7, 'No findings detected.', new_x="LMARGIN", new_y="NEXT")
+        _safe_cell(pdf, 0, 7, 'No findings detected.', new_x="LMARGIN", new_y="NEXT")
     else:
         pdf.set_font('Helvetica', '', 8)
         pdf.set_text_color(0, 0, 0)
@@ -279,7 +314,7 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
                     vehicle_str = invo[0].replace('_', ' ').title()
                 else:
                     desc = v.get('description', '')
-                    vehicle_str = desc.split(' ')[0].replace('_', ' ').title() if desc else '—'
+                    vehicle_str = desc.split(' ')[0].replace('_', ' ').title() if desc else '-'
                 raw_conf = v.get('confidence_label', '')
                 if raw_conf in ('HIGH CONFIDENCE',):
                     conf = 'High'
@@ -319,7 +354,7 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
 
         pdf.set_font('Helvetica', 'B', 13)
         pdf.set_text_color(20, 60, 120)
-        pdf.cell(0, 9, '5. Scene Assessment', new_x="LMARGIN", new_y="NEXT")
+        _safe_cell(pdf, 0, 9, '5. Scene Assessment', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(1)
 
         narrative = scene_understanding.get('narrative', '')
@@ -330,7 +365,7 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
         pdf.set_text_color(0, 0, 0)
         if narrative:
             pdf.set_font('Helvetica', 'I', 10)
-            pdf.multi_cell(0, 6, narrative)
+            _safe_multi_cell(pdf, 0, 6, narrative)
             pdf.ln(2)
 
         # Include detected object counts alongside narrative for cross-reference
@@ -344,7 +379,7 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
                 if v is not None and v > 0:
                     parts.append(f'{k.replace("_", " ").title()}: {v}')
             if parts:
-                pdf.cell(0, 5, 'Detected objects: ' + ' | '.join(parts), new_x="LMARGIN", new_y="NEXT")
+                _safe_cell(pdf, 0, 5, 'Detected objects: ' + ' | '.join(parts), new_x="LMARGIN", new_y="NEXT")
             pdf.ln(2)
             pdf.set_text_color(0, 0, 0)
 
@@ -353,9 +388,9 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
             ('Assessment Confidence', f'{reasoning_conf*100:.0f}%'),
         ]:
             pdf.set_font('Helvetica', 'B', 10)
-            pdf.cell(42, 7, label + ':')
+            _safe_cell(pdf, 42, 7, label + ':')
             pdf.set_font('Helvetica', '', 10)
-            pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
+            _safe_cell(pdf, 0, 7, value, new_x="LMARGIN", new_y="NEXT")
         pdf.ln(3)
 
     # ——— 6. Automated Assessment Summary ———
@@ -367,7 +402,7 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
 
         pdf.set_font('Helvetica', 'B', 13)
         pdf.set_text_color(20, 60, 120)
-        pdf.cell(0, 9, '6. Automated Assessment Summary', new_x="LMARGIN", new_y="NEXT")
+        _safe_cell(pdf, 0, 9, '6. Automated Assessment Summary', new_x="LMARGIN", new_y="NEXT")
         pdf.ln(1)
 
         v_status = ai_review_panel.get('verification_status', 'N/A').replace('_', ' ').title()
@@ -386,9 +421,9 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
             ('Enforcement Readiness', enforcement),
         ]:
             pdf.set_font('Helvetica', 'B', 10)
-            pdf.cell(52, 7, label + ':')
+            _safe_cell(pdf, 52, 7, label + ':')
             pdf.set_font('Helvetica', '', 10)
-            pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
+            _safe_cell(pdf, 0, 7, value, new_x="LMARGIN", new_y="NEXT")
         pdf.ln(3)
 
     # ——— 7. Officer Notes ———
@@ -400,11 +435,11 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
 
     pdf.set_font('Helvetica', 'B', 13)
     pdf.set_text_color(20, 60, 120)
-    pdf.cell(0, 9, '7. Officer Notes', new_x="LMARGIN", new_y="NEXT")
+    _safe_cell(pdf, 0, 9, '7. Officer Notes', new_x="LMARGIN", new_y="NEXT")
     pdf.ln(1)
     pdf.set_font('Helvetica', 'I', 10)
     pdf.set_text_color(100, 100, 100)
-    pdf.multi_cell(0, 6, '(Add notes, findings, or enforcement decisions for review)')
+    _safe_multi_cell(pdf, 0, 6, '(Add notes, findings, or enforcement decisions for review)')
     pdf.ln(5)
 
     # ——— 8. System Info (Footer) ———
@@ -414,8 +449,8 @@ def generate_evidence_report(image_path, detections, violations, license_plate, 
     pdf.ln(3)
     pdf.set_font('Helvetica', 'I', 8)
     pdf.set_text_color(80, 80, 80)
-    pdf.cell(0, 4, 'TRINETRA AI - AI-Powered Traffic Enforcement Intelligence Platform', new_x="LMARGIN", new_y="NEXT", align='C')
-    pdf.cell(0, 4, 'This report is for officer review. Enforcement decisions require human verification.', new_x="LMARGIN", new_y="NEXT", align='C')
+    _safe_cell(pdf, 0, 4, 'TRINETRA AI - AI-Powered Traffic Enforcement Intelligence Platform', new_x="LMARGIN", new_y="NEXT", align='C')
+    _safe_cell(pdf, 0, 4, 'This report is for officer review. Enforcement decisions require human verification.', new_x="LMARGIN", new_y="NEXT", align='C')
 
     source_basename = os.path.splitext(os.path.basename(source_filename or image_path))[0]
     report_path = os.path.join(config.REPORT_DIR, f"{source_basename}_report_{report_id}.pdf")
