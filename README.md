@@ -11,29 +11,31 @@ app_port: 7860
 
 AI-powered traffic enforcement intelligence platform for smart cities. Automatically detects 8 violation types from traffic camera images, reads license plates, generates evidence PDFs, and provides predictive enforcement analytics.
 
-**Hackathon Alignment**: Developed for the *Automated Photo Identification and Classification for Traffic Violations Using Computer Vision* challenge — covering image preprocessing, vehicle/pedestrian detection, violation detection (helmet, seatbelt, triple riding, wrong-side, red-light, stop-line, illegal parking), license plate OCR, evidence generation, and performance evaluation (Accuracy, Precision, Recall, F1, mAP).
+**Hackathon Alignment**: Developed for the *Automated Photo Identification and Classification for Traffic Violations Using Computer Vision* challenge — covering image preprocessing, vehicle/pedestrian detection, violation detection (helmet, triple riding, overloading, seatbelt, wrong-side, red-light, stop-line, illegal parking), license plate OCR, evidence generation, and performance evaluation (Accuracy, Precision, Recall, F1, mAP).
 
 ## Features
 
-- **8 Violation Detectors** — Helmet non-compliance, seatbelt non-compliance, triple riding, wrong-side driving, red-light violation, stop-line violation, illegal parking, motorcycle overloading
-- **License Plate OCR** — Full plate text extraction via EasyOCR with fragment recombination ("KA01" + "AB" + "1234" → "KA01AB1234")
-- **Vehicle & Road User Detection** — YOLOv8 detects cars, motorcycles, buses, trucks, persons, traffic lights, stop signs
+- **8 Violation Detectors** — Helmet non-compliance, triple riding, motorcycle overloading, seatbelt non-compliance, wrong-side driving, red-light violation, stop-line violation, illegal parking
+- **License Plate OCR** — Full plate text extraction via EasyOCR with fragment recombination & plate enhancement
+- **Vehicle & Road User Detection** — YOLOv8s detects cars, motorcycles, buses, trucks, persons, traffic lights, stop signs
 - **Explainable AI** — Per-violation confidence, reliability badge, human review status, and enforcement recommendation
 - **Risk Scoring** — Enhanced profiling with repeat-offender multipliers, location risk, time-of-day risk
-- **Evidence Reports** — Professional PDF reports (fpdf2) with case info, quality assessment, violation table, officer notes
+- **Evidence Reports** — Professional PDF reports (fpdf2) with case info, quality assessment, violation table, scene assessment, officer notes
 - **Repeat Offender Tracking** — Vehicle-level violation history and risk scoring
-- **Hotspot Analytics** — Location-based violation clustering
-- **Forecast Engine** — Predictive enforcement recommendations
+- **Hotspot Analytics** — Location-based violation clustering with risk levels
+- **Forecast Engine** — Predictive enforcement recommendations based on historical patterns
 - **AI Copilot** — Natural-language query engine for intelligence data
 - **Enforcement Dashboard** — Smart city decision support with charts & recommendations
-- **Robust Preprocessing** — Handles low light, rain, shadows, motion blur via `enhance_image()`
-- **Performance Evaluation** — `evaluate.py` computes Accuracy, Precision, Recall, F1-score, mAP with 11-point interpolation
+- **Image Enhancement** — Handles low light, rain, shadows, motion blur, haze via multi-stage enhancement pipeline
+- **Scene Reasoning** — Florence-2 based scene understanding with template fallback
+- **Image Quality Assessment** — Brightness, contrast, sharpness, noise metrics with issue detection
+- **Performance Evaluation** — 309-image benchmark across 15 categories, automated 15-phase validation pipeline
 
 ## Quick Start
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.9+
 - Node.js 18+
 - npm
 
@@ -44,6 +46,10 @@ bash start.sh
 ```
 
 Opens at **http://localhost:8000**.
+
+On first run, `start.sh` automatically downloads the required models:
+- `yolov8s.pt` (21.5 MB) — supplied by Ultralytics hub
+- `helmet_yolov8n.pt` (5.9 MB) — from Hugging Face `iam-tsr/yolov8n-helmet-detection`
 
 ### Development Mode (hot reload)
 
@@ -81,16 +87,21 @@ The Space builds and deploys automatically. Visit `https://YOUR_USERNAME-trinetr
 ```
 ├── backend/
 │   ├── ai/                      # AI models & detection modules
-│   │   ├── locate_anything.py   # YOLOv8 object detection (fallback chain)
-│   │   ├── ocr.py               # License plate OCR with fragment recombination
-│   │   ├── helmet_detector.py   # YOLO helmet model + HSV fallback
-│   │   ├── triple_riding.py     # Rider association & occupancy analysis
-│   │   ├── seatbelt_detector.py # Car occupant seatbelt check (strict containment)
+│   │   ├── detector.py          # YOLOv8s object detection (singleton)
+│   │   ├── helmet_detector.py   # YOLO helmet model (v5 crop-based) + HSV fallback
+│   │   ├── rider_association.py # Person-motorcycle association scoring
+│   │   ├── triple_riding.py     # Occupancy analysis & overloading classification
+│   │   ├── seatbelt_detector.py # Car occupant seatbelt check
 │   │   ├── wrong_side_detector.py # Lane-line-based wrong-side analysis
-│   │   ├── red_light_detector.py  # Traffic light color + stop line crossing
+│   │   ├── red_light_detector.py  # Traffic light color detection
 │   │   ├── stop_line_detector.py  # Hough line stop-line detection
 │   │   ├── parking_detector.py # Heuristic illegal parking detection
-│   │   ├── rider_association.py   # Person-motorcycle association scoring
+│   │   ├── scene_reasoning.py  # Florence-2 scene understanding + template fallback
+│   │   ├── image_quality.py    # Quality metrics: brightness, contrast, sharpness, noise
+│   │   ├── enhancement_engine.py # Multi-stage image enhancement pipeline
+│   │   ├── motion_validator.py # Motion validation for wrong-side detections
+│   │   ├── confidence_fusion.py # Multi-detector confidence fusion
+│   │   ├── violation_selector.py # Primary violation selection & evidence scoring
 │   │   ├── evidence_package.py # PDF evidence report generation
 │   │   ├── evidence_generator.py  # Annotated evidence image generation
 │   │   ├── risk_scoring.py        # Risk profiling engine
@@ -100,42 +111,43 @@ The Space builds and deploys automatically. Visit `https://YOUR_USERNAME-trinetr
 │   │   ├── forecast_engine.py     # Predictive enforcement forecasts
 │   │   ├── report_generator.py    # Analytics report generation
 │   │   ├── copilot_engine.py      # Natural-language AI copilot
-│   │   └── quality_assessment.py  # Image quality assessment
+│   │   └── ocr.py                 # License plate OCR with fragment recombination
 │   ├── database/               # SQLite database layer
 │   ├── utils/                  # Image processing utilities
-│   ├── main.py                 # FastAPI application
+│   ├── main.py                 # FastAPI application (1200+ lines)
 │   ├── config.py               # Configuration & constants
-│   ├── evaluate.py             # Performance evaluation (Accuracy, Precision, Recall, F1, mAP)
+│   ├── download_helmet_model.py # Helmet model auto-downloader
 │   └── requirements.txt
 ├── frontend/                   # Vite + React + TypeScript + Tailwind
 │   ├── src/
-│   │   └── pages/              # Dashboard, Copilot, Reports, etc.
+│   │   └── pages/              # Dashboard, Copilot, Reports, Live, etc.
 │   └── ...
-├── data/                       # Uploads & generated reports
-├── tests/                      # Test scripts & sample images
-│   ├── samples/                # 20 test images (helmet, OCR, parking, etc.)
-│   └── test_samples.py         # Automated test suite (20 cases)
-└── start.sh                    # One-command launcher
+├── data/                       # Uploads, evidence images, & PDF reports
+├── backend/validation/         # 15-phase validation pipeline (309 images)
+├── backend/artifacts/          # Benchmark results & reports
+├── generate_ppt.py             # Hackathon PPT generator
+└── start.sh                    # One-command launcher (v2)
 ```
 
 ## Violation Detectors
 
-| Violation | Detector | Method |
-|---|---|---|
-| Helmet non-compliance | `helmet_detector.py` | YOLOv8 fine-tuned helmet model + HSV fallback |
-| Seatbelt non-compliance | `seatbelt_detector.py` | Hough line transform on car occupant torso |
-| Triple riding | `triple_riding.py` | Rider association scoring (distance, vertical, horizontal, overlap) |
-| Wrong-side driving | `wrong_side_detector.py` | Lane line detection + vehicle position analysis |
-| Red-light violation | `red_light_detector.py` | YOLO traffic light class (9) + HSV color analysis |
-| Stop-line violation | `stop_line_detector.py` | Hough line stop-line detection + vehicle position |
-| Illegal parking | `parking_detector.py` | Spatial & pedestrian context heuristics |
-| Motorcycle overloading | `triple_riding.py` | Rider count exceeds occupancy limits |
+| Violation | Detector | Method | Status |
+|---|---|---|---|
+| Helmet non-compliance | `helmet_detector.py` | YOLOv8 fine-tuned (v5 crop-based) + HSV emergency fallback | Beta — 77.7% validation pass rate |
+| Triple riding | `triple_riding.py` | Rider association scoring (distance/vertical/horizontal/overlap weights) | Active — 54.2% pass rate |
+| Motorcycle overloading | `triple_riding.py` | Rider count exceeds occupancy limits (4+ overloading, 5+ extreme) | Active — YOLO detection limit |
+| Seatbelt non-compliance | `seatbelt_detector.py` | Hough line transform on car occupant torso | Disabled (hackathon) |
+| Wrong-side driving | `wrong_side_detector.py` | Lane line detection + vehicle position analysis | Disabled (hackathon) |
+| Red-light violation | `red_light_detector.py` | HSV color analysis on traffic light ROI | Disabled (hackathon) |
+| Stop-line violation | `stop_line_detector.py` | Hough line stop-line + vehicle overlap | Disabled (hackathon) |
+| Illegal parking | `parking_detector.py` | Spatial & pedestrian context heuristics | Disabled (hackathon) |
 
 ## API Endpoints
 
 | Endpoint | Description |
 |---|---|
-| `POST /api/detect` | Upload image for violation detection |
+| `POST /api/detect` | Upload image for full violation detection pipeline |
+| `GET /api/health` | System health with model status |
 | `GET /api/violations` | List violations with filters |
 | `GET /api/violations/stats` | Violation statistics |
 | `GET /api/violations/analytics` | Analytics by type, day, hour, location |
@@ -144,18 +156,35 @@ The Space builds and deploys automatically. Visit `https://YOUR_USERNAME-trinetr
 | `GET /api/intelligence/watchlist` | Vehicle watchlist |
 | `GET /api/intelligence/hotspots` | Violation hotspot analysis |
 | `GET /api/intelligence/forecasts` | Predictive enforcement forecasts |
-| `GET /api/evidence/{filename}` | Get evidence image |
+| `GET /api/evidence/{filename}` | Get annotated evidence image |
 | `GET /api/evidence/report/{filename}` | Get PDF evidence report |
+| `GET /api/system/performance` | Performance metrics (response times, throughput) |
+| `GET /api/system/health` | System health card with model & detector status |
+| `GET /api/copilot/query` | Natural-language intelligence query |
 
 Full API docs at `/docs` when running.
 
 ## Tech Stack
 
-- **Backend:** Python, FastAPI, Uvicorn, SQLite
-- **AI:** Ultralytics YOLOv8, EasyOCR, OpenCV, NumPy
-- **Frontend:** React, TypeScript, Vite, Tailwind CSS
-- **Reporting:** fpdf2
-- **Evaluation:** Accuracy, Precision, Recall, F1-score, mAP (11-point interpolation)
+- **Backend:** Python 3.9+, FastAPI, Uvicorn, SQLite
+- **AI:** Ultralytics YOLOv8s, Hugging Face Transformers (Florent-2), EasyOCR, OpenCV, NumPy, SciPy
+- **Frontend:** React 19, TypeScript, Vite 6, Tailwind CSS 3
+- **Reporting:** fpdf2, Pillow
+- **Evaluation:** 309-image benchmark, 15-phase automated validation, Accuracy/Precision/Recall/F1/mAP
+
+## Performance (309-image Benchmark)
+
+| Category | Pass Rate |
+|---|---|
+| Overall | 77.7% (240/309) |
+| HELMET_MISSING | 100% (61/61) |
+| TRIPLE_RIDING | 54.2% (13/24) |
+| OVERLOADING | 0% (0/15) — YOLO detection limit |
+| COMPLIANT | 82.5% (33/40) |
+| NON_COMPLIANT | 84.0% (21/25) |
+| LOWLIGHT | 82.6% (19/23) |
+
+Pipeline timing: YOLO ~37ms, helmet ~6ms/crop, total ~839ms avg (p95: 1482ms).
 
 ## License
 

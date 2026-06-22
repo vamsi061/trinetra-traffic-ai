@@ -95,22 +95,22 @@ def add_callout(slide, x, y, text, color=RED):
     tf.paragraphs[0].alignment = PP_ALIGN.CENTER
     return shape
 
-SAMPLE_DIR = '/tmp/opencode/trinetra-ai-v2/data/uploads'
-EVIDENCE_DIR = '/tmp/opencode/trinetra-ai-v2/data/evidence'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SAMPLE_DIR = os.path.join(BASE_DIR, 'data', 'uploads')
+EVIDENCE_DIR = os.path.join(BASE_DIR, 'data', 'evidence')
 
 def find_source(sample_base):
     if not os.path.isdir(SAMPLE_DIR):
         return None
-    suffix = sample_base if sample_base.startswith('_') else '_' + sample_base
     for f in os.listdir(SAMPLE_DIR):
-        if f.endswith(suffix):
+        if f.endswith(sample_base):
             return os.path.join(SAMPLE_DIR, f)
     return None
 
 def find_evidence(source_name):
     if not os.path.isdir(EVIDENCE_DIR):
         return None
-    base = os.path.splitext(source_name)[0]
+    base = os.path.splitext(os.path.basename(source_name))[0]
     for f in os.listdir(EVIDENCE_DIR):
         if base in f:
             return os.path.join(EVIDENCE_DIR, f)
@@ -531,9 +531,7 @@ add_rect(slide, Inches(4.5), Inches(6.5), Inches(4.3), Inches(0.04), RED)
 # ═══════════════════════════════════════════════════════════════
 # SAVE
 # ═══════════════════════════════════════════════════════════════
-output_dir = '/tmp/opencode'
-os.makedirs(output_dir, exist_ok=True)
-output_path = os.path.join(output_dir, 'TRINETRA_AI_Presentation.pptx')
+output_path = os.path.join(BASE_DIR, 'TRINETRA_AI_Presentation.pptx')
 prs.save(output_path)
 print(f'Presentation saved: {output_path}')
 print(f'Total slides: {len(prs.slides)}')
